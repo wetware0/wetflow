@@ -10,6 +10,8 @@ public sealed class AudioRecorder : IDisposable
     private string? _rawPath;
     private readonly object _lock = new();
 
+    public event Action<float>? VolumeChanged;
+
     public void Start()
     {
         lock (_lock)
@@ -23,10 +25,26 @@ public sealed class AudioRecorder : IDisposable
             {
                 lock (_lock)
                     _writer?.Write(e.Buffer, 0, e.BytesRecorded);
+
+                VolumeChanged?.Invoke(ComputeRms(e.Buffer, e.BytesRecorded));
             };
 
             _capture.StartRecording();
         }
+    }
+
+    private static float ComputeRms(byte[] buffer, int bytesRecorded)
+    {
+        if (bytesRecorded < 2) return 0f;
+        double sum = 0;
+        int samples = bytesRecorded / 2;
+        for (int i = 0; i < bytesRecorded - 1; i += 2)
+        {
+            short sample = (short)(buffer[i] | (buffer[i + 1] << 8));
+            double norm = sample / 32768.0;
+            sum += norm * norm;
+        }
+        return Math.Min(1f, (float)Math.Sqrt(sum / samples) * 4f);
     }
 
     public string? Stop()

@@ -6,10 +6,12 @@ public sealed class TrayApp : ApplicationContext
     private KeyboardHook _hook;
     private readonly AudioRecorder _recorder;
     private readonly Transcriber _transcriber;
+    private readonly OverlayForm _overlay;
     private AppSettings _settings;
     private Icon _idleIcon = null!;
     private Icon _recordingIcon = null!;
     private bool _busy;
+    private bool _recording;
 
     private static readonly string LogPath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
@@ -34,6 +36,12 @@ public sealed class TrayApp : ApplicationContext
         _transcriber = new Transcriber();
         _transcriber.StatusChanged += msg => _tray.Text = $"WetFlow — {msg}";
 
+        _overlay = new OverlayForm();
+        _overlay.RecordToggleRequested += OnOverlayRecordToggle;
+        _overlay.PositionChanged += OnOverlayPositionChanged;
+        _recorder.VolumeChanged += level => _overlay.UpdateVolume(level);
+        PositionOverlay();
+
         _hook = new KeyboardHook(_settings.HotkeyVKey);
         _hook.KeyDown += OnKeyDown;
         _hook.KeyUp += OnKeyUp;
@@ -41,6 +49,19 @@ public sealed class TrayApp : ApplicationContext
     }
 
     private string IdleTrayText => $"WetFlow — hold {(Keys)_settings.HotkeyVKey} to dictate";
+
+    private void PositionOverlay()
+    {
+        if (_settings.OverlayX >= 0 && _settings.OverlayY >= 0)
+        {
+            _overlay.Location = new Point(_settings.OverlayX, _settings.OverlayY);
+        }
+        else
+        {
+            var screen = Screen.PrimaryScreen?.WorkingArea ?? new Rectangle(0, 0, 1920, 1080);
+            _overlay.Location = new Point(screen.Right - _overlay.Width - 24, screen.Bottom - _overlay.Height - 24);
+        }
+    }
 
     private static Icon LoadIcon(string resourceName)
     {
@@ -55,6 +76,13 @@ public sealed class TrayApp : ApplicationContext
     {
         var menu = new ContextMenuStrip();
         menu.Items.Add("Settings", null, OnSettings);
+        var overlayToggle = new ToolStripMenuItem("Show overlay") { Checked = _settings.ShowOverlay, CheckOnClick = true };
+        overlayToggle.CheckedChanged += (s, _) =>
+        {
+            _settings.ShowOverlay = ((ToolStripMenuItem)s!).Checked;
+            _settings.Save();
+        };
+        menu.Items.Add(overlayToggle);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Exit", null, (_, _) => ExitApp());
         return menu;
@@ -62,15 +90,18 @@ public sealed class TrayApp : ApplicationContext
 
     private void OnKeyDown()
     {
-        if (_busy) return;
+        if (_busy || _recording) return;
+        _recording = true;
         _recorder.Start();
         _tray.Icon = _recordingIcon;
         _tray.Text = "WetFlow — recording…";
+        if (_settings.ShowOverlay) _overlay.ShowRecording();
     }
 
     private void OnKeyUp()
     {
-        if (_busy) return;
+        if (_busy || !_recording) return;
+        _recording = false;
         _busy = true;
         Task.Run(async () =>
         {
@@ -80,6 +111,8 @@ public sealed class TrayApp : ApplicationContext
                 if (wavPath == null) return;
 
                 _tray.Text = "WetFlow — transcribing…";
+                if (_settings.ShowOverlay) _overlay.ShowTranscribing();
+
                 var text = await _transcriber.TranscribeAsync(wavPath, _settings.WhisperModel);
                 File.Delete(wavPath);
 
@@ -95,9 +128,23 @@ public sealed class TrayApp : ApplicationContext
             {
                 _tray.Icon = _idleIcon;
                 _tray.Text = IdleTrayText;
+                if (_settings.ShowOverlay) _overlay.HideOverlay();
                 _busy = false;
             }
         });
+    }
+
+    private void OnOverlayRecordToggle(object? sender, EventArgs e)
+    {
+        if (_recording) OnKeyUp();
+        else OnKeyDown();
+    }
+
+    private void OnOverlayPositionChanged(object? sender, EventArgs e)
+    {
+        _settings.OverlayX = _overlay.Left;
+        _settings.OverlayY = _overlay.Top;
+        _settings.Save();
     }
 
     private static void LogError(Exception ex)
@@ -141,6 +188,7 @@ public sealed class TrayApp : ApplicationContext
             _hook.Dispose();
             _recorder.Dispose();
             _transcriber.Dispose();
+            _overlay.Dispose();
             _tray.Dispose();
             _idleIcon.Dispose();
             _recordingIcon.Dispose();

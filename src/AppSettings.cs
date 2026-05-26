@@ -6,6 +6,9 @@ public class AppSettings
 {
     public int HotkeyVKey { get; set; } = (int)Keys.F12;
     public string WhisperModel { get; set; } = "base";
+    public int OverlayX { get; set; } = -1;
+    public int OverlayY { get; set; } = -1;
+    public bool ShowOverlay { get; set; } = true;
 
     private static readonly string SettingsPath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
