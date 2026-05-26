@@ -5,11 +5,11 @@ namespace WetFlow;
 public sealed class KeyboardHook : IDisposable
 {
     private const int WH_KEYBOARD_LL = 13;
-    private const int WM_KEYDOWN = 0x0100;
-    private const int WM_KEYUP = 0x0101;
-    private const int WM_SYSKEYDOWN = 0x0104;
-    private const int WM_SYSKEYUP = 0x0105;
-    private const int VK_ESCAPE = 0x1B;
+    internal const int WM_KEYDOWN = 0x0100;
+    internal const int WM_KEYUP = 0x0101;
+    internal const int WM_SYSKEYDOWN = 0x0104;
+    internal const int WM_SYSKEYUP = 0x0105;
+    internal const int VK_ESCAPE = 0x1B;
 
     public event Action? KeyDown;
     public event Action? KeyUp;
@@ -43,7 +43,7 @@ public sealed class KeyboardHook : IDisposable
         }
     }
 
-    private IntPtr HookCallback(int nCode, IntPtr wParam, IntPtr lParam)
+    internal IntPtr HookCallback(int nCode, IntPtr wParam, IntPtr lParam)
     {
         if (nCode >= 0)
         {
