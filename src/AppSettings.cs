@@ -17,21 +17,24 @@ public class AppSettings
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
         "wetflow", "settings.json");
 
-    public static AppSettings Load()
+    public static (AppSettings settings, Exception? error) Load() => Load(SettingsPath);
+
+    internal static (AppSettings settings, Exception? error) Load(string path)
     {
         try
         {
-            if (File.Exists(SettingsPath))
+            if (File.Exists(path))
             {
-                var json = File.ReadAllText(SettingsPath);
-                return JsonSerializer.Deserialize<AppSettings>(json) ?? new AppSettings();
+                var json = File.ReadAllText(path);
+                return (JsonSerializer.Deserialize<AppSettings>(json) ?? new AppSettings(), null);
             }
         }
         catch (Exception ex)
         {
             TrayApp.LogError(ex);
+            return (new AppSettings(), ex);
         }
-        return new AppSettings();
+        return (new AppSettings(), null);
     }
 
     public void Save()

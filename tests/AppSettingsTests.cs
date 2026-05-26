@@ -71,4 +71,58 @@ public class AppSettingsTests
 
         Assert.False(loaded.UseToggleMode);
     }
+
+    [Fact]
+    public void AppSettings_Deserialize_ThrowsOnInvalidJson()
+    {
+        // Exercises the exception type that Load() catches. Load() itself is not tested
+        // directly here to avoid filesystem coupling — see AppSettings.Load() catch block.
+        Assert.Throws<JsonException>(() =>
+            JsonSerializer.Deserialize<AppSettings>("{ not valid json"));
+    }
+
+    [Fact]
+    public void Load_ReturnsDefaults_WhenFileDoesNotExist()
+    {
+        var (settings, error) = AppSettings.Load(Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".json"));
+
+        Assert.Null(error);
+        Assert.Equal(-1, settings.OverlayX);
+    }
+
+    [Fact]
+    public void Load_ReturnsError_WhenFileIsCorrupt()
+    {
+        var path = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllText(path, "{ not valid json");
+            var (settings, error) = AppSettings.Load(path);
+
+            Assert.NotNull(error);
+            Assert.IsType<JsonException>(error);
+            Assert.Equal(-1, settings.OverlayX); // fallback defaults
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public void Load_ReturnsSettings_WhenFileIsValid()
+    {
+        var path = Path.GetTempFileName();
+        try
+        {
+            var original = new AppSettings { HotkeyVKey = 0x70, WhisperModel = "small", OverlayX = 100, OverlayY = 200 };
+            File.WriteAllText(path, JsonSerializer.Serialize(original));
+
+            var (loaded, error) = AppSettings.Load(path);
+
+            Assert.Null(error);
+            Assert.Equal(0x70, loaded.HotkeyVKey);
+            Assert.Equal("small", loaded.WhisperModel);
+            Assert.Equal(100, loaded.OverlayX);
+            Assert.Equal(200, loaded.OverlayY);
+        }
+        finally { File.Delete(path); }
+    }
 }

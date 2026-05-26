@@ -20,7 +20,7 @@ public sealed class TrayApp : ApplicationContext
 
     public TrayApp()
     {
-        _settings = AppSettings.Load();
+        (_settings, var settingsLoadError) = AppSettings.Load();
 
         _sm = new RecordingStateMachine(_settings.UseToggleMode);
         _sm.RecordingStarted += OnRecordingStarted;
@@ -38,6 +38,9 @@ public sealed class TrayApp : ApplicationContext
             Visible = true,
             ContextMenuStrip = BuildMenu()
         };
+
+        if (settingsLoadError != null)
+            WarnSettingsLoadFailed();
 
         _uiContext = SynchronizationContext.Current ?? new WindowsFormsSynchronizationContext();
 
@@ -207,12 +210,19 @@ public sealed class TrayApp : ApplicationContext
         catch { }
     }
 
+    private void WarnSettingsLoadFailed() =>
+        _tray.ShowBalloonTip(5000, "WetFlow Warning",
+            $"Failed to load settings, using defaults. (see {LogPath})",
+            ToolTipIcon.Warning);
+
     private void OnSettings(object? sender, EventArgs e)
     {
         _hook.Uninstall();
         using var form = new SettingsForm(_settings);
         form.ShowDialog();
-        _settings = AppSettings.Load();
+        (_settings, var reloadError) = AppSettings.Load();
+        if (reloadError != null)
+            WarnSettingsLoadFailed();
 
         _hook.Dispose();
         _hook = new KeyboardHook(_settings.HotkeyVKey);
