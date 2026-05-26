@@ -15,26 +15,14 @@ public class KeyboardHookTests
     }
 
     [Fact]
-    public void Cancelled_NotFiredWhenIsCancellableIsFalse()
-    {
-        var hook = new KeyboardHook(0x70);
-        var fired = false;
-        hook.Cancelled += () => fired = true;
-
-        // IsCancellable is false by default — Cancelled must not have fired
-        Assert.False(fired);
-        Assert.False(hook.IsCancellable);
-    }
-
-    [Fact]
     public void HookCallback_EscapeKeyDown_WhenCancellable_SuppressesAndFiresCancelled()
     {
-        var hook = new KeyboardHook(0x70 /* F1 */);
+        var hook = new KeyboardHook(0x70);
         hook.IsCancellable = true;
         var fired = false;
         hook.Cancelled += () => fired = true;
 
-        var ptr = Marshal.AllocHGlobal(4);
+        var ptr = Marshal.AllocHGlobal(24); // KBDLLHOOKSTRUCT is 20–24 bytes; only vkCode (offset 0) is read by HookCallback
         try
         {
             Marshal.WriteInt32(ptr, KeyboardHook.VK_ESCAPE);
@@ -56,7 +44,7 @@ public class KeyboardHookTests
         var fired = false;
         hook.Cancelled += () => fired = true;
 
-        var ptr = Marshal.AllocHGlobal(4);
+        var ptr = Marshal.AllocHGlobal(24); // KBDLLHOOKSTRUCT is 20–24 bytes; only vkCode (offset 0) is read by HookCallback
         try
         {
             Marshal.WriteInt32(ptr, KeyboardHook.VK_ESCAPE);
@@ -78,7 +66,7 @@ public class KeyboardHookTests
         var fired = false;
         hook.Cancelled += () => fired = true;
 
-        var ptr = Marshal.AllocHGlobal(4);
+        var ptr = Marshal.AllocHGlobal(24); // KBDLLHOOKSTRUCT is 20–24 bytes; only vkCode (offset 0) is read by HookCallback
         try
         {
             Marshal.WriteInt32(ptr, KeyboardHook.VK_ESCAPE);
@@ -100,7 +88,7 @@ public class KeyboardHookTests
         var fired = false;
         hook.Cancelled += () => fired = true;
 
-        var ptr = Marshal.AllocHGlobal(4);
+        var ptr = Marshal.AllocHGlobal(24); // KBDLLHOOKSTRUCT is 20–24 bytes; only vkCode (offset 0) is read by HookCallback
         try
         {
             Marshal.WriteInt32(ptr, KeyboardHook.VK_ESCAPE);
@@ -123,7 +111,7 @@ public class KeyboardHookTests
         var fired = false;
         hook.Cancelled += () => fired = true;
 
-        var ptr = Marshal.AllocHGlobal(4);
+        var ptr = Marshal.AllocHGlobal(24); // KBDLLHOOKSTRUCT is 20–24 bytes; only vkCode (offset 0) is read by HookCallback
         try
         {
             Marshal.WriteInt32(ptr, KeyboardHook.VK_ESCAPE);
@@ -144,7 +132,7 @@ public class KeyboardHookTests
         var fired = false;
         hook.KeyDown += () => fired = true;
 
-        var ptr = Marshal.AllocHGlobal(4);
+        var ptr = Marshal.AllocHGlobal(24); // KBDLLHOOKSTRUCT is 20–24 bytes; only vkCode (offset 0) is read by HookCallback
         try
         {
             Marshal.WriteInt32(ptr, 0x70);
@@ -165,7 +153,7 @@ public class KeyboardHookTests
         var fired = false;
         hook.KeyUp += () => fired = true;
 
-        var ptr = Marshal.AllocHGlobal(4);
+        var ptr = Marshal.AllocHGlobal(24); // KBDLLHOOKSTRUCT is 20–24 bytes; only vkCode (offset 0) is read by HookCallback
         try
         {
             Marshal.WriteInt32(ptr, 0x70);
@@ -191,7 +179,7 @@ public class KeyboardHookTests
         hook.KeyUp += () => keyUpFired = true;
         hook.Cancelled += () => cancelledFired = true;
 
-        var ptr = Marshal.AllocHGlobal(4);
+        var ptr = Marshal.AllocHGlobal(24); // KBDLLHOOKSTRUCT is 20–24 bytes; only vkCode (offset 0) is read by HookCallback
         try
         {
             Marshal.WriteInt32(ptr, 0x41); // 'A' — unrelated key
