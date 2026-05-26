@@ -42,8 +42,17 @@ On first use, the Whisper `base` model (~150 MB) is downloaded automatically to 
 
 ## Run on login
 
-Right-click the tray icon and choose **Settings**, or create a shortcut in your Startup folder:
+Right-click the tray icon and choose **Settings**, or create a startup shortcut:
 
+**Pre-built release** (replace path with where you extracted the ZIP):
+```powershell
+$exe = "C:\Path\To\WetFlow\WetFlow.exe"
+$lnk = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup\WetFlow.lnk"
+$wsh = New-Object -ComObject WScript.Shell
+$s = $wsh.CreateShortcut($lnk); $s.TargetPath = $exe; $s.Save()
+```
+
+**Build from source** (run from repo root after building):
 ```powershell
 $exe = "$PWD\src\bin\Release\net8.0-windows\WetFlow.exe"
 $lnk = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup\WetFlow.lnk"
@@ -89,6 +98,17 @@ src/
   Transcriber.cs    — Whisper.net local transcription, model auto-download
   TrayApp.cs        — orchestrator, tray icon, pipeline coordination
 ```
+
+## Releasing
+
+To publish a new release, push a version tag:
+
+```powershell
+git tag v1.0.1
+git push origin v1.0.1
+```
+
+GitHub Actions will run tests, build a self-contained `win-x64` ZIP, and create a GitHub release automatically.
 
 ## License
 

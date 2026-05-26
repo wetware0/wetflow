@@ -24,10 +24,19 @@ jobs:
         run: dotnet test WetFlow.sln -c Release --logger "console;verbosity=minimal"
 
       - name: Publish
-        run: dotnet publish src/WetFlow.csproj -c Release -r win-x64 --self-contained true -o publish
+        run: |
+          $version = "${{ github.ref_name }}".TrimStart('v')
+          dotnet publish src/WetFlow.csproj -c Release -r win-x64 --self-contained true -o publish -p:Version=$version -p:DebugType=None -p:DebugSymbols=false
+
+      - name: Verify artifacts
+        run: |
+          if (-not (Test-Path "publish\WetFlow.exe")) { throw "WetFlow.exe not found in publish output" }
+          if (-not (Test-Path "publish\whisper.dll"))  { throw "whisper.dll not found in publish output — self-contained bundling may have failed" }
+          Write-Host "Artifact check passed: WetFlow.exe and whisper.dll present."
 
       - name: Create ZIP
-        run: Compress-Archive -Path publish\* -DestinationPath "WetFlow-${{ github.ref_name }}-win-x64.zip"
+        # -Force ensures re-runs don't fail on a leftover ZIP from a prior attempt
+        run: Compress-Archive -Path publish\* -DestinationPath "WetFlow-${{ github.ref_name }}-win-x64.zip" -Force
 
       - name: Create GitHub Release
         run: gh release create "${{ github.ref_name }}" "WetFlow-${{ github.ref_name }}-win-x64.zip" --generate-notes --title "WetFlow ${{ github.ref_name }}"
