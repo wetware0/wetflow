@@ -1,0 +1,6 @@
+src/bin/
+src/obj/
+.archon/artifacts/
+.archon/logs/
+.claude/
+*.user
