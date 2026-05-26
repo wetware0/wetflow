@@ -71,4 +71,11 @@ public class AppSettingsTests
 
         Assert.False(loaded.UseToggleMode);
     }
+
+    [Fact]
+    public void AppSettings_Deserialize_ThrowsOnInvalidJson()
+    {
+        Assert.Throws<JsonException>(() =>
+            JsonSerializer.Deserialize<AppSettings>("{ not valid json"));
+    }
 }
