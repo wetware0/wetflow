@@ -70,8 +70,7 @@ public sealed class TrayApp : ApplicationContext
     {
         var asm = typeof(TrayApp).Assembly;
         using var stream = asm.GetManifestResourceStream(resourceName);
-        if (stream != null) return new Icon(stream);
-        return SystemIcons.Application;
+        return stream != null ? new Icon(stream) : SystemIcons.Application;
     }
 
     private ContextMenuStrip BuildMenu()
@@ -178,8 +177,8 @@ public sealed class TrayApp : ApplicationContext
     private void OnSettings(object? sender, EventArgs e)
     {
         _hook.Uninstall();
-        using (var form = new SettingsForm(_settings))
-            form.ShowDialog();
+        using var form = new SettingsForm(_settings);
+        form.ShowDialog();
         _settings = AppSettings.Load();
 
         // Rebind hook to the (possibly changed) hotkey.
