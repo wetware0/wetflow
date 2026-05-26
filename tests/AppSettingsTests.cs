@@ -27,7 +27,7 @@ public class AppSettingsTests
         Assert.True(settings.ShowOverlay);
         Assert.Equal(0.5, settings.ShortPauseSecs);
         Assert.Equal(1.5, settings.LongPauseSecs);
-        Assert.False(settings.UseToggleMode);
+        Assert.True(settings.UseToggleMode);
     }
 
     [Fact]

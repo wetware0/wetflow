@@ -50,16 +50,16 @@ public static class TextInjector
         var inputs = new List<INPUT>();
         foreach (var ch in text)
         {
-            inputs.Add(new INPUT
+            if (ch == '\n')
             {
-                type = INPUT_KEYBOARD,
-                u = new INPUTUNION { ki = new KEYBDINPUT { wScan = ch, dwFlags = KEYEVENTF_UNICODE } }
-            });
-            inputs.Add(new INPUT
+                inputs.Add(new INPUT { type = INPUT_KEYBOARD, u = new INPUTUNION { ki = new KEYBDINPUT { wVk = 0x0D } } });
+                inputs.Add(new INPUT { type = INPUT_KEYBOARD, u = new INPUTUNION { ki = new KEYBDINPUT { wVk = 0x0D, dwFlags = KEYEVENTF_KEYUP } } });
+            }
+            else if (ch != '\r')
             {
-                type = INPUT_KEYBOARD,
-                u = new INPUTUNION { ki = new KEYBDINPUT { wScan = ch, dwFlags = KEYEVENTF_UNICODE | KEYEVENTF_KEYUP } }
-            });
+                inputs.Add(new INPUT { type = INPUT_KEYBOARD, u = new INPUTUNION { ki = new KEYBDINPUT { wScan = ch, dwFlags = KEYEVENTF_UNICODE } } });
+                inputs.Add(new INPUT { type = INPUT_KEYBOARD, u = new INPUTUNION { ki = new KEYBDINPUT { wScan = ch, dwFlags = KEYEVENTF_UNICODE | KEYEVENTF_KEYUP } } });
+            }
         }
 
         var arr = inputs.ToArray();
