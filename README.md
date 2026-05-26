@@ -4,8 +4,14 @@ Push-to-talk transcription for Windows. Hold **F12**, speak, release — transcr
 
 ## How it works
 
+Push-to-talk (default):
 ```
 [F12 ↓] → record mic  →  [F12 ↑] → Whisper transcribes → text injected at cursor
+```
+
+Toggle mode:
+```
+[F12 ↓] → record mic  →  [F12 ↓ again] → Whisper transcribes → text injected at cursor
 ```
 
 Audio is captured via WASAPI, resampled to 16 kHz mono, and transcribed by [Whisper.net](https://github.com/sandrohanea/whisper.net) using a local GGML model downloaded on first use (~150 MB for the default `base` model). Text is injected via `SendInput` (Unicode), with a clipboard + Ctrl+V fallback.
@@ -48,6 +54,7 @@ Right-click the tray icon → **Settings**:
 | Whisper model | `base` | `tiny` is faster; `small` / `medium` are more accurate but slower and larger |
 | Short pause (sec) | `0.5` | Gap between Whisper segments that inserts a single newline (`\n`) in the output |
 | Long pause (sec) | `1.5` | Gap between segments that inserts a blank line (`\n\n`); gaps below short pause are joined with a space |
+| Toggle mode | Off | When on: press once to start, press again to stop. When off: hold to record, release to transcribe |
 
 Settings are saved to `%APPDATA%\wetflow\settings.json`.
 
@@ -57,7 +64,7 @@ Errors are logged to `%APPDATA%\wetflow\error.log` with full stack traces.
 
 | Symptom | Likely cause |
 |---|---|
-| No transcription, no error | Recording was too short (<200 ms) — hold the key longer |
+| No transcription, no error | Recording was too short (<200 ms) — speak for longer before releasing (push-to-talk) or pressing again (toggle mode) |
 | Tray shows "Downloading…" for a long time | First-run model download; check your internet connection |
 | Text injected in wrong case | Target app is intercepting modifier keys — switch to a non-modifier hotkey |
 | App won't start (second instance) | Already running — check the system tray |
