@@ -145,8 +145,6 @@ public sealed class TrayApp : ApplicationContext
 
                 var text = await _transcriber.TranscribeAsync(wavPath, _settings.WhisperModel,
                     _settings.ShortPauseSecs, _settings.LongPauseSecs, token);
-                File.Delete(wavPath);
-                wavPath = null;
 
                 if (!string.IsNullOrWhiteSpace(text))
                     await TextInjector.InjectAsync(text);
