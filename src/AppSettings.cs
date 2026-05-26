@@ -4,7 +4,7 @@ namespace WetFlow;
 
 public class AppSettings
 {
-    public int HotkeyVKey { get; set; } = (int)Keys.RShiftKey;
+    public int HotkeyVKey { get; set; } = (int)Keys.F12;
     public string WhisperModel { get; set; } = "base";
 
     private static readonly string SettingsPath = Path.Combine(

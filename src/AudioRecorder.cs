@@ -6,8 +6,8 @@ namespace WetFlow;
 public sealed class AudioRecorder : IDisposable
 {
     private WasapiCapture? _capture;
-    private MemoryStream? _buffer;
     private WaveFileWriter? _writer;
+    private string? _rawPath;
     private readonly object _lock = new();
 
     public void Start()
@@ -15,9 +15,9 @@ public sealed class AudioRecorder : IDisposable
         lock (_lock)
         {
             Stop();
+            _rawPath = Path.Combine(Path.GetTempPath(), $"wetflow_raw_{Guid.NewGuid():N}.wav");
             _capture = new WasapiCapture();
-            _buffer = new MemoryStream();
-            _writer = new WaveFileWriter(_buffer, _capture.WaveFormat);
+            _writer = new WaveFileWriter(_rawPath, _capture.WaveFormat);
 
             _capture.DataAvailable += (_, e) =>
             {
@@ -43,26 +43,31 @@ public sealed class AudioRecorder : IDisposable
             _writer?.Dispose();
             _writer = null;
 
-            if (_buffer == null || _buffer.Length == 0)
+            var rawPath = _rawPath;
+            _rawPath = null;
+
+            if (rawPath == null || !File.Exists(rawPath)) return null;
+
+            try
             {
-                _buffer?.Dispose();
-                _buffer = null;
-                return null;
+                using (var reader = new WaveFileReader(rawPath))
+                {
+                    // Skip ultra-short recordings (e.g. key tapped) — Whisper rejects empty/silent input.
+                    if (reader.TotalTime < TimeSpan.FromMilliseconds(200))
+                        return null;
+
+                    var outPath = Path.Combine(Path.GetTempPath(), $"wetflow_{Guid.NewGuid():N}.wav");
+                    var targetFormat = new WaveFormat(16000, 16, 1);
+                    using var resampler = new MediaFoundationResampler(reader, targetFormat);
+                    resampler.ResamplerQuality = 60;
+                    WaveFileWriter.CreateWaveFile(outPath, resampler);
+                    return outPath;
+                }
             }
-
-            // Resample to 16kHz mono 16-bit for Whisper
-            _buffer.Position = 0;
-            var tempPath = Path.Combine(Path.GetTempPath(), $"wetflow_{Guid.NewGuid():N}.wav");
-
-            using var reader = new WaveFileReader(_buffer);
-            var targetFormat = new WaveFormat(16000, 16, 1);
-            using var resampler = new MediaFoundationResampler(reader, targetFormat);
-            resampler.ResamplerQuality = 60;
-            WaveFileWriter.CreateWaveFile(tempPath, resampler);
-
-            _buffer.Dispose();
-            _buffer = null;
-            return tempPath;
+            finally
+            {
+                try { File.Delete(rawPath); } catch { }
+            }
         }
     }
 
@@ -70,6 +75,9 @@ public sealed class AudioRecorder : IDisposable
     {
         _capture?.Dispose();
         _writer?.Dispose();
-        _buffer?.Dispose();
+        if (_rawPath != null)
+        {
+            try { File.Delete(_rawPath); } catch { }
+        }
     }
 }

@@ -3,13 +3,17 @@ namespace WetFlow;
 public sealed class TrayApp : ApplicationContext
 {
     private readonly NotifyIcon _tray;
-    private readonly KeyboardHook _hook;
+    private KeyboardHook _hook;
     private readonly AudioRecorder _recorder;
     private readonly Transcriber _transcriber;
     private AppSettings _settings;
     private Icon _idleIcon = null!;
     private Icon _recordingIcon = null!;
     private bool _busy;
+
+    private static readonly string LogPath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+        "wetflow", "error.log");
 
     public TrayApp()
     {
@@ -21,7 +25,7 @@ public sealed class TrayApp : ApplicationContext
         _tray = new NotifyIcon
         {
             Icon = _idleIcon,
-            Text = "WetFlow — hold Right Shift to dictate",
+            Text = IdleTrayText,
             Visible = true,
             ContextMenuStrip = BuildMenu()
         };
@@ -35,6 +39,8 @@ public sealed class TrayApp : ApplicationContext
         _hook.KeyUp += OnKeyUp;
         _hook.Install();
     }
+
+    private string IdleTrayText => $"WetFlow — hold {(Keys)_settings.HotkeyVKey} to dictate";
 
     private static Icon LoadIcon(string resourceName)
     {
@@ -82,24 +88,43 @@ public sealed class TrayApp : ApplicationContext
             }
             catch (Exception ex)
             {
-                _tray.ShowBalloonTip(3000, "WetFlow Error", ex.Message, ToolTipIcon.Error);
+                LogError(ex);
+                _tray.ShowBalloonTip(8000, "WetFlow Error", $"{ex.Message} (see {LogPath})", ToolTipIcon.Error);
             }
             finally
             {
                 _tray.Icon = _idleIcon;
-                _tray.Text = "WetFlow — hold Right Shift to dictate";
+                _tray.Text = IdleTrayText;
                 _busy = false;
             }
         });
     }
 
+    private static void LogError(Exception ex)
+    {
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(LogPath)!);
+            File.AppendAllText(LogPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {ex}{Environment.NewLine}{Environment.NewLine}");
+        }
+        catch { }
+    }
+
     private void OnSettings(object? sender, EventArgs e)
     {
         _hook.Uninstall();
-        using var form = new SettingsForm(_settings);
-        form.ShowDialog();
+        using (var form = new SettingsForm(_settings))
+            form.ShowDialog();
         _settings = AppSettings.Load();
+
+        // Rebind hook to the (possibly changed) hotkey.
+        _hook.Dispose();
+        _hook = new KeyboardHook(_settings.HotkeyVKey);
+        _hook.KeyDown += OnKeyDown;
+        _hook.KeyUp += OnKeyUp;
         _hook.Install();
+
+        _tray.Text = IdleTrayText;
     }
 
     private void ExitApp()
