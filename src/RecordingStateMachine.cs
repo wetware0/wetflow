@@ -69,6 +69,19 @@ public sealed class RecordingStateMachine
             StopRecording();
     }
 
+    public void HandleOverlayToggle()
+    {
+        switch (CurrentState)
+        {
+            case State.Idle:
+                HandleKeyDown();
+                break;
+            case State.Recording:
+                HandleForceStop();
+                break;
+        }
+    }
+
     private void StopRecording()
     {
         CurrentState = State.Transcribing;

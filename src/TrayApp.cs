@@ -108,13 +108,7 @@ public sealed class TrayApp : ApplicationContext
 
     private void OnCancelled() => _sm.HandleCancelled();
 
-    private void OnOverlayRecordToggle(object? sender, EventArgs e)
-    {
-        if (_sm.CurrentState == RecordingStateMachine.State.Recording)
-            _sm.HandleForceStop();
-        else
-            _sm.HandleKeyDown();
-    }
+    private void OnOverlayRecordToggle(object? sender, EventArgs e) => _sm.HandleOverlayToggle();
 
     private void OnRecordingStarted()
     {
