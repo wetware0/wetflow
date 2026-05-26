@@ -2,6 +2,10 @@
 
 Push-to-talk transcription for Windows. Hold **F12**, speak, release — transcribed text is injected at the cursor. Runs entirely locally; no API key or internet connection required after first launch.
 
+## Download
+
+Pre-built releases for Windows 10/11 (x64) are available on the [Releases page](https://github.com/wetware0/wetflow/releases). Download the latest `WetFlow-vX.Y.Z-win-x64.zip`, extract it, and run `WetFlow.exe`. No .NET installation required.
+
 ## How it works
 
 Push-to-talk (default):
@@ -18,9 +22,12 @@ Audio is captured via WASAPI, resampled to 16 kHz mono, and transcribed by [Whis
 
 ## Requirements
 
-- Windows 10/11
-- [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8) (to build)
+To **run** (pre-built release):
+- Windows 10/11 (x64)
 - A microphone
+
+To **build from source**:
+- [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8)
 
 ## Build & run
 
