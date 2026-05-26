@@ -71,7 +71,6 @@ public sealed class TrayApp : ApplicationContext
         var asm = typeof(TrayApp).Assembly;
         using var stream = asm.GetManifestResourceStream(resourceName);
         if (stream != null) return new Icon(stream);
-        // Fallback: generate a simple 16x16 icon programmatically
         return SystemIcons.Application;
     }
 

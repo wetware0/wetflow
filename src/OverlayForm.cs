@@ -162,10 +162,8 @@ public sealed class OverlayForm : Form
         {
             e.Cancel = true;
             Hide();
-            base.OnFormClosing(e);
         }
-        else
-            base.OnFormClosing(e);
+        base.OnFormClosing(e);
     }
 
     protected override void Dispose(bool disposing)
