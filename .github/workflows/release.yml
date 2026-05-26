@@ -31,7 +31,7 @@ jobs:
       - name: Verify artifacts
         run: |
           if (-not (Test-Path "publish\WetFlow.exe")) { throw "WetFlow.exe not found in publish output" }
-          if (-not (Test-Path "publish\whisper.dll"))  { throw "whisper.dll not found in publish output — self-contained bundling may have failed" }
+          if (-not (Test-Path "publish\whisper.dll")) { throw "whisper.dll not found in publish output — self-contained bundling may have failed" }
           Write-Host "Artifact check passed: WetFlow.exe and whisper.dll present."
 
       - name: Create ZIP
