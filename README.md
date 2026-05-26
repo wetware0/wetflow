@@ -46,6 +46,8 @@ Right-click the tray icon → **Settings**:
 |---|---|---|
 | Hotkey | F12 | Any key; modifier keys (Shift, Ctrl, …) work but can cause sticky-key behavior |
 | Whisper model | `base` | `tiny` is faster; `small` / `medium` are more accurate but slower and larger |
+| Short pause (sec) | `0.5` | Gap between Whisper segments that inserts a single newline (`\n`) in the output |
+| Long pause (sec) | `1.5` | Gap between segments that inserts a blank line (`\n\n`); gaps below short pause are joined with a space |
 
 Settings are saved to `%APPDATA%\wetflow\settings.json`.
 
