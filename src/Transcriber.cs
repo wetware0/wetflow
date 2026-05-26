@@ -1,3 +1,4 @@
+using System.Text;
 using Whisper.net;
 using Whisper.net.Ggml;
 
@@ -38,7 +39,7 @@ public sealed class Transcriber : IDisposable
     {
         if (segments.Count == 0) return string.Empty;
 
-        var sb = new System.Text.StringBuilder();
+        var sb = new StringBuilder();
         sb.Append(segments[0].Text.Trim());
 
         for (int i = 1; i < segments.Count; i++)

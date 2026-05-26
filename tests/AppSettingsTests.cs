@@ -25,6 +25,8 @@ public class AppSettingsTests
         Assert.Equal(-1, settings.OverlayX);
         Assert.Equal(-1, settings.OverlayY);
         Assert.True(settings.ShowOverlay);
+        Assert.Equal(0.5, settings.ShortPauseSecs);
+        Assert.Equal(1.5, settings.LongPauseSecs);
     }
 
     [Fact]

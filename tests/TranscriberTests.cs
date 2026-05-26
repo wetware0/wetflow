@@ -55,4 +55,28 @@ public class TranscriberTests
         };
         Assert.Equal("First second\nThird\n\nFourth", Transcriber.FormatSegments(segs, 0.5, 1.5));
     }
+
+    [Fact]
+    public void FormatSegments_ExactShortPauseGap_InsertsNewline()
+    {
+        // gap == shortPauseSecs exactly → >= is inclusive, so \n
+        var segs = new[] { Seg("Hello", 0, 1.0), Seg("world", 1.5, 2.5) };
+        Assert.Equal("Hello\nworld", Transcriber.FormatSegments(segs, 0.5, 1.5));
+    }
+
+    [Fact]
+    public void FormatSegments_ExactLongPauseGap_InsertsBlankLine()
+    {
+        // gap == longPauseSecs exactly → >= is inclusive, so \n\n
+        var segs = new[] { Seg("Hello", 0, 1.0), Seg("world", 2.5, 3.5) };
+        Assert.Equal("Hello\n\nworld", Transcriber.FormatSegments(segs, 0.5, 1.5));
+    }
+
+    [Fact]
+    public void FormatSegments_NegativeGap_JoinsWithSpace()
+    {
+        // Whisper can emit overlapping segments (end > next start)
+        var segs = new[] { Seg("Hello", 0, 2.0), Seg("world", 1.5, 3.0) };
+        Assert.Equal("Hello world", Transcriber.FormatSegments(segs, 0.5, 1.5));
+    }
 }

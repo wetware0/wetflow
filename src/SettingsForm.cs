@@ -78,6 +78,12 @@ public class SettingsForm : Form
 
     private void OnSave(object? sender, EventArgs e)
     {
+        if (_shortPauseInput.Value >= _longPauseInput.Value)
+        {
+            MessageBox.Show("Short pause must be less than long pause.", "WetFlow Settings",
+                MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
         _settings.HotkeyVKey = _pendingVKey;
         _settings.WhisperModel = _modelCombo.SelectedItem?.ToString() ?? "base";
         _settings.ShortPauseSecs = (double)_shortPauseInput.Value;
