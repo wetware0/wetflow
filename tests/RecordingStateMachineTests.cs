@@ -146,7 +146,7 @@ public class RecordingStateMachineTests
         Assert.Equal(RecordingStateMachine.State.Idle, sm.CurrentState);
     }
 
-    // ── Guard: busy (Transcribing) ignores new start ─────────────────────────
+    // ── Guard: Transcribing state ignores new start ──────────────────────────
 
     [Fact]
     public void HandleKeyDown_WhenTranscribing_IsNoOp()
@@ -170,6 +170,34 @@ public class RecordingStateMachineTests
         sm.HandleKeyUp();
 
         Assert.Equal(RecordingStateMachine.State.Idle, sm.CurrentState);
+    }
+
+    // ── Guard: no-op calls from invalid states ───────────────────────────────
+
+    [Fact]
+    public void HandleCancelled_WhenIdle_IsNoOp()
+    {
+        var sm = new RecordingStateMachine(useToggleMode: false);
+        var anyFired = false;
+        sm.RecordingCancelled += () => anyFired = true;
+        sm.TranscriptionCancellationRequested += () => anyFired = true;
+
+        sm.HandleCancelled();
+
+        Assert.False(anyFired);
+        Assert.Equal(RecordingStateMachine.State.Idle, sm.CurrentState);
+    }
+
+    [Fact]
+    public void HandleKeyUp_WhenTranscribing_IsNoOp()
+    {
+        var sm = new RecordingStateMachine(useToggleMode: false);
+        sm.HandleKeyDown();
+        sm.HandleKeyUp();
+
+        sm.HandleKeyUp();
+
+        Assert.Equal(RecordingStateMachine.State.Transcribing, sm.CurrentState);
     }
 
     // ── UseToggleMode can be changed after construction ───────────────────────

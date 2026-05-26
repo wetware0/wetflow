@@ -145,10 +145,7 @@ public sealed class TrayApp : ApplicationContext
             {
                 wavPath = _recorder.Stop();
                 if (wavPath == null)
-                {
-                    _uiContext.Post(_ => _sm.HandleTranscriptionComplete(), null);
                     return;
-                }
 
                 _tray.Text = "WetFlow — transcribing…";
                 if (_settings.ShowOverlay) _overlay.ShowTranscribing();
