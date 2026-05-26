@@ -9,9 +9,12 @@ public sealed class KeyboardHook : IDisposable
     private const int WM_KEYUP = 0x0101;
     private const int WM_SYSKEYDOWN = 0x0104;
     private const int WM_SYSKEYUP = 0x0105;
+    private const int VK_ESCAPE = 0x1B;
 
     public event Action? KeyDown;
     public event Action? KeyUp;
+    public event Action? Cancelled;
+    public volatile bool IsCancellable;
 
     private readonly int _vKey;
     private IntPtr _hookId = IntPtr.Zero;
@@ -45,9 +48,9 @@ public sealed class KeyboardHook : IDisposable
         if (nCode >= 0)
         {
             var vkCode = Marshal.ReadInt32(lParam);
+            var msg = (int)wParam;
             if (vkCode == _vKey)
             {
-                var msg = (int)wParam;
                 if ((msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN) && !_recording)
                 {
                     _recording = true;
@@ -63,6 +66,12 @@ public sealed class KeyboardHook : IDisposable
                 // Suppress repeat key-down events while recording
                 if ((msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN) && _recording)
                     return (IntPtr)1;
+            }
+            else if (vkCode == VK_ESCAPE && IsCancellable)
+            {
+                if (msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN)
+                    Cancelled?.Invoke();
+                return (IntPtr)1; // suppress both keydown and keyup
             }
         }
         return CallNextHookEx(_hookId, nCode, wParam, lParam);
