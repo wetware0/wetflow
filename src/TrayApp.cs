@@ -10,8 +10,7 @@ public sealed class TrayApp : ApplicationContext
     private AppSettings _settings;
     private Icon _idleIcon = null!;
     private Icon _recordingIcon = null!;
-    private volatile bool _busy;
-    private bool _recording;
+    private readonly RecordingStateMachine _sm;
     private CancellationTokenSource? _cts;
     private readonly SynchronizationContext _uiContext;
 
@@ -22,6 +21,12 @@ public sealed class TrayApp : ApplicationContext
     public TrayApp()
     {
         _settings = AppSettings.Load();
+
+        _sm = new RecordingStateMachine(_settings.UseToggleMode);
+        _sm.RecordingStarted += OnRecordingStarted;
+        _sm.StoppedForTranscription += OnStoppedForTranscription;
+        _sm.RecordingCancelled += OnRecordingCancelled;
+        _sm.TranscriptionCancellationRequested += () => _cts?.Cancel();
 
         _idleIcon = LoadIcon("WetFlow.Resources.mic_idle.ico");
         _recordingIcon = LoadIcon("WetFlow.Resources.mic_recording.ico");
@@ -82,13 +87,13 @@ public sealed class TrayApp : ApplicationContext
         var menu = new ContextMenuStrip();
         menu.Items.Add("Settings", null, OnSettings);
         var overlayToggle = new ToolStripMenuItem("Show overlay") { Checked = _settings.ShowOverlay, CheckOnClick = true };
-        overlayToggle.CheckedChanged += (s, _) =>
+        overlayToggle.CheckedChanged += (_, _) =>
         {
-            _settings.ShowOverlay = ((ToolStripMenuItem)s!).Checked;
+            _settings.ShowOverlay = overlayToggle.Checked;
             _settings.Save();
             if (!_settings.ShowOverlay)
                 _overlay.HideOverlay();
-            else if (_recording)
+            else if (_sm.CurrentState == RecordingStateMachine.State.Recording)
                 _overlay.ShowRecording();
         };
         menu.Items.Add(overlayToggle);
@@ -97,17 +102,18 @@ public sealed class TrayApp : ApplicationContext
         return menu;
     }
 
-    private void OnKeyDown()
+    private void OnKeyDown() => _sm.HandleKeyDown();
+
+    private void OnKeyUp() => _sm.HandleKeyUp();
+
+    private void OnCancelled() => _sm.HandleCancelled();
+
+    private void OnOverlayRecordToggle(object? sender, EventArgs e) => _sm.HandleOverlayToggle();
+
+    private void OnRecordingStarted()
     {
-        if (_busy) return;
-        if (_recording)
-        {
-            if (_settings.UseToggleMode) OnKeyUp(intentionalStop: true);
-            return;
-        }
         try
         {
-            _recording = true;
             _recorder.Start();
             _hook.IsCancellable = true;
             _tray.Icon = _recordingIcon;
@@ -116,20 +122,14 @@ public sealed class TrayApp : ApplicationContext
         }
         catch (Exception ex)
         {
-            _recording = false;
+            _sm.HandleStartFailed();
             LogError(ex);
             _tray.ShowBalloonTip(5000, "WetFlow Error", $"Could not start recording: {ex.Message}", ToolTipIcon.Error);
         }
     }
 
-    private void OnKeyUp() => OnKeyUp(intentionalStop: false);
-
-    private void OnKeyUp(bool intentionalStop)
+    private void OnStoppedForTranscription()
     {
-        if (_busy || !_recording) return;
-        if (_settings.UseToggleMode && !intentionalStop) return;
-        _recording = false;
-        _busy = true;
         _cts = new CancellationTokenSource();
         var token = _cts.Token;
         Task.Run(async () =>
@@ -138,7 +138,8 @@ public sealed class TrayApp : ApplicationContext
             try
             {
                 wavPath = _recorder.Stop();
-                if (wavPath == null) return;
+                if (wavPath == null)
+                    return;
 
                 _tray.Text = "WetFlow — transcribing…";
                 if (_settings.ShowOverlay) _overlay.ShowTranscribing();
@@ -165,42 +166,28 @@ public sealed class TrayApp : ApplicationContext
                 if (_settings.ShowOverlay) _overlay.HideOverlay();
                 _hook.IsCancellable = false;
                 _cts?.Dispose();
-                _uiContext.Post(_ => {
+                _uiContext.Post(_ =>
+                {
                     _tray.Icon = _idleIcon;
                     _tray.Text = IdleTrayText;
+                    _sm.HandleTranscriptionComplete();
                 }, null);
-                _busy = false;
             }
         });
     }
 
-    private void OnCancelled()
+    private void OnRecordingCancelled()
     {
-        if (_recording)
+        _hook.IsCancellable = false;
+        var wavPath = _recorder.Stop();
+        if (wavPath != null)
+            try { File.Delete(wavPath); } catch (Exception) { }
+        if (_settings.ShowOverlay) _overlay.HideOverlay();
+        _uiContext.Post(_ =>
         {
-            // Cancelled during recording phase — stop recorder, skip transcription
-            _recording = false;
-            _hook.IsCancellable = false;
-            var wavPath = _recorder.Stop();
-            if (wavPath != null)
-                try { File.Delete(wavPath); } catch (Exception) { }
-            if (_settings.ShowOverlay) _overlay.HideOverlay();
-            _uiContext.Post(_ => {
-                _tray.Icon = _idleIcon;
-                _tray.Text = IdleTrayText;
-            }, null);
-        }
-        else if (_busy)
-        {
-            // Cancelled during transcription phase — CancellationToken stops the pipeline
-            _cts?.Cancel();
-        }
-    }
-
-    private void OnOverlayRecordToggle(object? sender, EventArgs e)
-    {
-        if (_recording) OnKeyUp(intentionalStop: true);
-        else OnKeyDown();
+            _tray.Icon = _idleIcon;
+            _tray.Text = IdleTrayText;
+        }, null);
     }
 
     private void OnOverlayPositionChanged(object? sender, EventArgs e)
@@ -227,7 +214,6 @@ public sealed class TrayApp : ApplicationContext
         form.ShowDialog();
         _settings = AppSettings.Load();
 
-        // Rebind hook to the (possibly changed) hotkey.
         _hook.Dispose();
         _hook = new KeyboardHook(_settings.HotkeyVKey);
         _hook.KeyDown += OnKeyDown;
@@ -235,6 +221,7 @@ public sealed class TrayApp : ApplicationContext
         _hook.Cancelled += OnCancelled;
         _hook.Install();
 
+        _sm.UseToggleMode = _settings.UseToggleMode;
         _tray.Text = IdleTrayText;
     }
 
