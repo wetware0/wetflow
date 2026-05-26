@@ -13,9 +13,12 @@ public sealed class Transcriber : IDisposable
     public event Action<string>? StatusChanged;
 
     public async Task<string> TranscribeAsync(string wavPath, string modelName = "base",
-        double shortPauseSecs = 0.5, double longPauseSecs = 1.5)
+        double shortPauseSecs = 0.5, double longPauseSecs = 1.5,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         await EnsureInitializedAsync(modelName);
+        cancellationToken.ThrowIfCancellationRequested();
 
         if (_factory == null)
             return string.Empty;
@@ -27,7 +30,7 @@ public sealed class Transcriber : IDisposable
         using var fileStream = File.OpenRead(wavPath);
         var segments = new List<(string Text, TimeSpan Start, TimeSpan End)>();
 
-        await foreach (var segment in processor.ProcessAsync(fileStream))
+        await foreach (var segment in processor.ProcessAsync(fileStream).WithCancellation(cancellationToken))
             segments.Add((segment.Text, segment.Start, segment.End));
 
         return FormatSegments(segments, shortPauseSecs, longPauseSecs);

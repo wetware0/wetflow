@@ -12,6 +12,7 @@ public sealed class TrayApp : ApplicationContext
     private Icon _recordingIcon = null!;
     private volatile bool _busy;
     private bool _recording;
+    private CancellationTokenSource? _cts;
     private readonly SynchronizationContext _uiContext;
 
     private static readonly string LogPath = Path.Combine(
@@ -48,6 +49,7 @@ public sealed class TrayApp : ApplicationContext
         _hook = new KeyboardHook(_settings.HotkeyVKey);
         _hook.KeyDown += OnKeyDown;
         _hook.KeyUp += OnKeyUp;
+        _hook.Cancelled += OnCancelled;
         _hook.Install();
     }
 
@@ -107,6 +109,7 @@ public sealed class TrayApp : ApplicationContext
         {
             _recording = true;
             _recorder.Start();
+            _hook.IsCancellable = true;
             _tray.Icon = _recordingIcon;
             _tray.Text = "WetFlow — recording…";
             if (_settings.ShowOverlay) _overlay.ShowRecording();
@@ -127,22 +130,30 @@ public sealed class TrayApp : ApplicationContext
         if (_settings.UseToggleMode && !intentionalStop) return;
         _recording = false;
         _busy = true;
+        _cts = new CancellationTokenSource();
+        var token = _cts.Token;
         Task.Run(async () =>
         {
+            string? wavPath = null;
             try
             {
-                var wavPath = _recorder.Stop();
+                wavPath = _recorder.Stop();
                 if (wavPath == null) return;
 
                 _tray.Text = "WetFlow — transcribing…";
                 if (_settings.ShowOverlay) _overlay.ShowTranscribing();
 
                 var text = await _transcriber.TranscribeAsync(wavPath, _settings.WhisperModel,
-                    _settings.ShortPauseSecs, _settings.LongPauseSecs);
+                    _settings.ShortPauseSecs, _settings.LongPauseSecs, token);
                 File.Delete(wavPath);
+                wavPath = null;
 
                 if (!string.IsNullOrWhiteSpace(text))
                     await TextInjector.InjectAsync(text);
+            }
+            catch (OperationCanceledException)
+            {
+                // Escape pressed — discard without injecting
             }
             catch (Exception ex)
             {
@@ -151,7 +162,11 @@ public sealed class TrayApp : ApplicationContext
             }
             finally
             {
+                if (wavPath != null)
+                    try { File.Delete(wavPath); } catch (Exception) { }
                 if (_settings.ShowOverlay) _overlay.HideOverlay();
+                _hook.IsCancellable = false;
+                _cts?.Dispose();
                 _uiContext.Post(_ => {
                     _tray.Icon = _idleIcon;
                     _tray.Text = IdleTrayText;
@@ -159,6 +174,29 @@ public sealed class TrayApp : ApplicationContext
                 _busy = false;
             }
         });
+    }
+
+    private void OnCancelled()
+    {
+        if (_recording)
+        {
+            // Cancelled during recording phase — stop recorder, skip transcription
+            _recording = false;
+            _hook.IsCancellable = false;
+            var wavPath = _recorder.Stop();
+            if (wavPath != null)
+                try { File.Delete(wavPath); } catch (Exception) { }
+            if (_settings.ShowOverlay) _overlay.HideOverlay();
+            _uiContext.Post(_ => {
+                _tray.Icon = _idleIcon;
+                _tray.Text = IdleTrayText;
+            }, null);
+        }
+        else if (_busy)
+        {
+            // Cancelled during transcription phase — CancellationToken stops the pipeline
+            _cts?.Cancel();
+        }
     }
 
     private void OnOverlayRecordToggle(object? sender, EventArgs e)
@@ -196,6 +234,7 @@ public sealed class TrayApp : ApplicationContext
         _hook = new KeyboardHook(_settings.HotkeyVKey);
         _hook.KeyDown += OnKeyDown;
         _hook.KeyUp += OnKeyUp;
+        _hook.Cancelled += OnCancelled;
         _hook.Install();
 
         _tray.Text = IdleTrayText;
