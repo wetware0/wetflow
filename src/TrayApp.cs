@@ -36,9 +36,7 @@ public sealed class TrayApp : ApplicationContext
         };
 
         if (settingsLoadError != null)
-            _tray.ShowBalloonTip(5000, "WetFlow Warning",
-                $"Failed to load settings, using defaults. ({settingsLoadError.Message})",
-                ToolTipIcon.Warning);
+            WarnSettingsLoadFailed(settingsLoadError);
 
         _uiContext = SynchronizationContext.Current ?? new WindowsFormsSynchronizationContext();
 
@@ -228,6 +226,11 @@ public sealed class TrayApp : ApplicationContext
         catch { }
     }
 
+    private void WarnSettingsLoadFailed(Exception ex) =>
+        _tray.ShowBalloonTip(5000, "WetFlow Warning",
+            $"Failed to load settings, using defaults. (see {LogPath})",
+            ToolTipIcon.Warning);
+
     private void OnSettings(object? sender, EventArgs e)
     {
         _hook.Uninstall();
@@ -236,9 +239,7 @@ public sealed class TrayApp : ApplicationContext
         var (reloadedSettings, reloadError) = AppSettings.Load();
         _settings = reloadedSettings;
         if (reloadError != null)
-            _tray.ShowBalloonTip(5000, "WetFlow Warning",
-                $"Failed to load settings, using defaults. ({reloadError.Message})",
-                ToolTipIcon.Warning);
+            WarnSettingsLoadFailed(reloadError);
 
         // Rebind hook to the (possibly changed) hotkey.
         _hook.Dispose();

@@ -75,6 +75,8 @@ public class AppSettingsTests
     [Fact]
     public void AppSettings_Deserialize_ThrowsOnInvalidJson()
     {
+        // Exercises the exception type that Load() catches. Load() itself is not tested
+        // directly here to avoid filesystem coupling — see AppSettings.Load() catch block.
         Assert.Throws<JsonException>(() =>
             JsonSerializer.Deserialize<AppSettings>("{ not valid json"));
     }

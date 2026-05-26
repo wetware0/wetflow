@@ -68,6 +68,7 @@ Errors are logged to `%APPDATA%\wetflow\error.log` with full stack traces.
 | Tray shows "Downloading…" for a long time | First-run model download; check your internet connection |
 | Text injected in wrong case | Target app is intercepting modifier keys — switch to a non-modifier hotkey |
 | App won't start (second instance) | Already running — check the system tray |
+| "WetFlow Warning" balloon on startup or after settings save | `settings.json` is corrupt or unreadable — app is using defaults. Check `%APPDATA%\wetflow\error.log` for details; delete `settings.json` to reset to defaults |
 
 ## Project structure
 
