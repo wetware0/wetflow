@@ -5,13 +5,20 @@ public sealed class OverlayForm : Form
     private enum State { Recording, Transcribing }
 
     private State _state = State.Recording;
-    private float _volume;
+    private volatile float _volume;
     private readonly float[] _bars = new float[9];
     private int _dotTick;
     private readonly System.Windows.Forms.Timer _timer;
     private Point _dragOffset;
     private bool _wasDragged;
     private static readonly Random _rng = new();
+
+    // Cached GDI objects — allocated once, reused every paint tick.
+    private readonly SolidBrush _textBrush = new(Color.White);
+    private readonly SolidBrush _dotBrush  = new(Color.LightSkyBlue);
+    private readonly SolidBrush _barBrush  = new(Color.FromArgb(80, 220, 100));
+    private readonly Font _labelFont = new("Segoe UI", 9f, FontStyle.Regular);
+    private readonly Font _dotFont   = new("Segoe UI", 11f);
 
     public event EventHandler? RecordToggleRequested;
     public event EventHandler? PositionChanged;
@@ -97,21 +104,16 @@ public sealed class OverlayForm : Form
         var g = e.Graphics;
         g.Clear(BackColor);
 
-        using var textBrush = new SolidBrush(Color.White);
-        using var font = new Font("Segoe UI", 9f, FontStyle.Regular);
-
         if (_state == State.Recording)
         {
-            g.DrawString("● Recording...", font, textBrush, 8, 6);
+            g.DrawString("● Recording...", _labelFont, _textBrush, 8, 6);
             DrawBars(g);
         }
         else
         {
             string dots = ((_dotTick / 4) % 3) switch { 0 => "•", 1 => "• •", _ => "• • •" };
-            g.DrawString("⟳ Transcribing...", font, textBrush, 8, 6);
-            using var dotBrush = new SolidBrush(Color.LightSkyBlue);
-            using var dotFont = new Font("Segoe UI", 11f);
-            g.DrawString(dots, dotFont, dotBrush, 8, 30);
+            g.DrawString("⟳ Transcribing...", _labelFont, _textBrush, 8, 6);
+            g.DrawString(dots, _dotFont, _dotBrush, 8, 30);
         }
     }
 
@@ -123,12 +125,11 @@ public sealed class OverlayForm : Form
         int baseY = 56;
         int startX = 8;
 
-        using var barBrush = new SolidBrush(Color.FromArgb(80, 220, 100));
         for (int i = 0; i < _bars.Length; i++)
         {
             int h = Math.Max(3, (int)(_bars[i] * maxHeight));
             int x = startX + i * (barWidth + gap);
-            g.FillRectangle(barBrush, x, baseY - h, barWidth, h);
+            g.FillRectangle(_barBrush, x, baseY - h, barWidth, h);
         }
     }
 
@@ -161,6 +162,7 @@ public sealed class OverlayForm : Form
         {
             e.Cancel = true;
             Hide();
+            base.OnFormClosing(e);
         }
         else
             base.OnFormClosing(e);
@@ -168,7 +170,15 @@ public sealed class OverlayForm : Form
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing) _timer.Dispose();
+        if (disposing)
+        {
+            _timer.Dispose();
+            _textBrush.Dispose();
+            _dotBrush.Dispose();
+            _barBrush.Dispose();
+            _labelFont.Dispose();
+            _dotFont.Dispose();
+        }
         base.Dispose(disposing);
     }
 }

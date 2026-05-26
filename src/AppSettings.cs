@@ -6,7 +6,7 @@ public class AppSettings
 {
     public int HotkeyVKey { get; set; } = (int)Keys.F12;
     public string WhisperModel { get; set; } = "base";
-    public int OverlayX { get; set; } = -1;
+    public int OverlayX { get; set; } = -1; // -1 = unset; PositionOverlay() falls back to bottom-right corner
     public int OverlayY { get; set; } = -1;
     public bool ShowOverlay { get; set; } = true;
 
@@ -35,6 +35,9 @@ public class AppSettings
             Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!);
             File.WriteAllText(SettingsPath, JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true }));
         }
-        catch { }
+        catch (Exception ex)
+        {
+            TrayApp.LogError(ex);
+        }
     }
 }

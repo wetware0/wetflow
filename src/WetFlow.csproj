@@ -23,4 +23,8 @@
     <EmbeddedResource Include="Resources\mic_recording.ico" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="WetFlow.Tests" />
+  </ItemGroup>
+
 </Project>

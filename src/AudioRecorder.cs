@@ -33,7 +33,7 @@ public sealed class AudioRecorder : IDisposable
         }
     }
 
-    private static float ComputeRms(byte[] buffer, int bytesRecorded)
+    internal static float ComputeRms(byte[] buffer, int bytesRecorded)
     {
         if (bytesRecorded < 2) return 0f;
         double sum = 0;
@@ -44,7 +44,7 @@ public sealed class AudioRecorder : IDisposable
             double norm = sample / 32768.0;
             sum += norm * norm;
         }
-        return Math.Min(1f, (float)Math.Sqrt(sum / samples) * 4f);
+        return Math.Min(1f, (float)Math.Sqrt(sum / samples) * 4f); // 4× gain — raw speech RMS (~0.01–0.15) maps to useful bar heights
     }
 
     public string? Stop()

@@ -10,8 +10,9 @@ public sealed class TrayApp : ApplicationContext
     private AppSettings _settings;
     private Icon _idleIcon = null!;
     private Icon _recordingIcon = null!;
-    private bool _busy;
+    private volatile bool _busy;
     private bool _recording;
+    private readonly SynchronizationContext _uiContext;
 
     private static readonly string LogPath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
@@ -31,6 +32,8 @@ public sealed class TrayApp : ApplicationContext
             Visible = true,
             ContextMenuStrip = BuildMenu()
         };
+
+        _uiContext = SynchronizationContext.Current ?? new WindowsFormsSynchronizationContext();
 
         _recorder = new AudioRecorder();
         _transcriber = new Transcriber();
@@ -81,6 +84,10 @@ public sealed class TrayApp : ApplicationContext
         {
             _settings.ShowOverlay = ((ToolStripMenuItem)s!).Checked;
             _settings.Save();
+            if (!_settings.ShowOverlay)
+                _overlay.HideOverlay();
+            else if (_recording)
+                _overlay.ShowRecording();
         };
         menu.Items.Add(overlayToggle);
         menu.Items.Add(new ToolStripSeparator());
@@ -91,11 +98,20 @@ public sealed class TrayApp : ApplicationContext
     private void OnKeyDown()
     {
         if (_busy || _recording) return;
-        _recording = true;
-        _recorder.Start();
-        _tray.Icon = _recordingIcon;
-        _tray.Text = "WetFlow — recording…";
-        if (_settings.ShowOverlay) _overlay.ShowRecording();
+        try
+        {
+            _recording = true;
+            _recorder.Start();
+            _tray.Icon = _recordingIcon;
+            _tray.Text = "WetFlow — recording…";
+            if (_settings.ShowOverlay) _overlay.ShowRecording();
+        }
+        catch (Exception ex)
+        {
+            _recording = false;
+            LogError(ex);
+            _tray.ShowBalloonTip(5000, "WetFlow Error", $"Could not start recording: {ex.Message}", ToolTipIcon.Error);
+        }
     }
 
     private void OnKeyUp()
@@ -126,9 +142,11 @@ public sealed class TrayApp : ApplicationContext
             }
             finally
             {
-                _tray.Icon = _idleIcon;
-                _tray.Text = IdleTrayText;
                 if (_settings.ShowOverlay) _overlay.HideOverlay();
+                _uiContext.Post(_ => {
+                    _tray.Icon = _idleIcon;
+                    _tray.Text = IdleTrayText;
+                }, null);
                 _busy = false;
             }
         });
@@ -147,7 +165,7 @@ public sealed class TrayApp : ApplicationContext
         _settings.Save();
     }
 
-    private static void LogError(Exception ex)
+    internal static void LogError(Exception ex)
     {
         try
         {
