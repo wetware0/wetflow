@@ -128,7 +128,8 @@ public sealed class TrayApp : ApplicationContext
                 _tray.Text = "WetFlow — transcribing…";
                 if (_settings.ShowOverlay) _overlay.ShowTranscribing();
 
-                var text = await _transcriber.TranscribeAsync(wavPath, _settings.WhisperModel);
+                var text = await _transcriber.TranscribeAsync(wavPath, _settings.WhisperModel,
+                    _settings.ShortPauseSecs, _settings.LongPauseSecs);
                 File.Delete(wavPath);
 
                 if (!string.IsNullOrWhiteSpace(text))

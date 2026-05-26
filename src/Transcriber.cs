@@ -11,7 +11,8 @@ public sealed class Transcriber : IDisposable
 
     public event Action<string>? StatusChanged;
 
-    public async Task<string> TranscribeAsync(string wavPath, string modelName = "base")
+    public async Task<string> TranscribeAsync(string wavPath, string modelName = "base",
+        double shortPauseSecs = 0.5, double longPauseSecs = 1.5)
     {
         await EnsureInitializedAsync(modelName);
 
@@ -23,12 +24,38 @@ public sealed class Transcriber : IDisposable
             .Build();
 
         using var fileStream = File.OpenRead(wavPath);
-        var segments = new List<string>();
+        var segments = new List<(string Text, TimeSpan Start, TimeSpan End)>();
 
         await foreach (var segment in processor.ProcessAsync(fileStream))
-            segments.Add(segment.Text);
+            segments.Add((segment.Text, segment.Start, segment.End));
 
-        return string.Join(" ", segments).Trim();
+        return FormatSegments(segments, shortPauseSecs, longPauseSecs);
+    }
+
+    internal static string FormatSegments(
+        IReadOnlyList<(string Text, TimeSpan Start, TimeSpan End)> segments,
+        double shortPauseSecs, double longPauseSecs)
+    {
+        if (segments.Count == 0) return string.Empty;
+
+        var sb = new System.Text.StringBuilder();
+        sb.Append(segments[0].Text.Trim());
+
+        for (int i = 1; i < segments.Count; i++)
+        {
+            var gap = (segments[i].Start - segments[i - 1].End).TotalSeconds;
+
+            if (gap >= longPauseSecs)
+                sb.Append("\n\n");
+            else if (gap >= shortPauseSecs)
+                sb.Append("\n");
+            else
+                sb.Append(" ");
+
+            sb.Append(segments[i].Text.Trim());
+        }
+
+        return sb.ToString().Trim();
     }
 
     private async Task EnsureInitializedAsync(string modelName)

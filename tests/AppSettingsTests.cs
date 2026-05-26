@@ -37,4 +37,15 @@ public class AppSettingsTests
         Assert.Equal(0x71, loaded.HotkeyVKey);
         Assert.Equal("small", loaded.WhisperModel);
     }
+
+    [Fact]
+    public void AppSettings_RoundTrip_PreservesPauseThresholds()
+    {
+        var original = new AppSettings { ShortPauseSecs = 0.3, LongPauseSecs = 2.0 };
+        var json = JsonSerializer.Serialize(original);
+        var loaded = JsonSerializer.Deserialize<AppSettings>(json)!;
+
+        Assert.Equal(0.3, loaded.ShortPauseSecs);
+        Assert.Equal(2.0, loaded.LongPauseSecs);
+    }
 }

@@ -6,6 +6,8 @@ public class SettingsForm : Form
     private Label _hotkeyLabel = null!;
     private Button _captureButton = null!;
     private ComboBox _modelCombo = null!;
+    private NumericUpDown _shortPauseInput = null!;
+    private NumericUpDown _longPauseInput = null!;
     private Button _saveButton = null!;
     private int _pendingVKey;
     private bool _capturing;
@@ -24,7 +26,7 @@ public class SettingsForm : Form
         MaximizeBox = false;
         MinimizeBox = false;
         StartPosition = FormStartPosition.CenterScreen;
-        ClientSize = new Size(320, 160);
+        ClientSize = new Size(320, 278);
 
         var hotkeyGroupLabel = new Label { Text = "Push-to-talk hotkey:", Left = 16, Top = 16, Width = 140, AutoSize = true };
         _hotkeyLabel = new Label { Left = 16, Top = 38, Width = 180, Height = 24, BorderStyle = BorderStyle.FixedSingle, TextAlign = ContentAlignment.MiddleLeft };
@@ -38,11 +40,17 @@ public class SettingsForm : Form
         _modelCombo.SelectedItem = _settings.WhisperModel;
         if (_modelCombo.SelectedIndex < 0) _modelCombo.SelectedIndex = 1;
 
-        _saveButton = new Button { Text = "Save", Left = 220, Top = 120, Width = 80, Height = 28, DialogResult = DialogResult.OK };
+        var shortPauseLabel = new Label { Text = "Short pause (sec):", Left = 16, Top = 132, Width = 140, AutoSize = true };
+        _shortPauseInput = new NumericUpDown { Left = 16, Top = 154, Width = 80, Minimum = 0.1M, Maximum = 10.0M, DecimalPlaces = 1, Increment = 0.1M, Value = (decimal)_settings.ShortPauseSecs };
+
+        var longPauseLabel = new Label { Text = "Long pause (sec):", Left = 16, Top = 184, Width = 140, AutoSize = true };
+        _longPauseInput = new NumericUpDown { Left = 16, Top = 206, Width = 80, Minimum = 0.1M, Maximum = 10.0M, DecimalPlaces = 1, Increment = 0.1M, Value = (decimal)_settings.LongPauseSecs };
+
+        _saveButton = new Button { Text = "Save", Left = 220, Top = 238, Width = 80, Height = 28, DialogResult = DialogResult.OK };
         _saveButton.Click += OnSave;
         AcceptButton = _saveButton;
 
-        Controls.AddRange(new Control[] { hotkeyGroupLabel, _hotkeyLabel, _captureButton, modelGroupLabel, _modelCombo, _saveButton });
+        Controls.AddRange(new Control[] { hotkeyGroupLabel, _hotkeyLabel, _captureButton, modelGroupLabel, _modelCombo, shortPauseLabel, _shortPauseInput, longPauseLabel, _longPauseInput, _saveButton });
         KeyPreview = true;
     }
 
@@ -72,6 +80,8 @@ public class SettingsForm : Form
     {
         _settings.HotkeyVKey = _pendingVKey;
         _settings.WhisperModel = _modelCombo.SelectedItem?.ToString() ?? "base";
+        _settings.ShortPauseSecs = (double)_shortPauseInput.Value;
+        _settings.LongPauseSecs = (double)_longPauseInput.Value;
         _settings.Save();
     }
 }
