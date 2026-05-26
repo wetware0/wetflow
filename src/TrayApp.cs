@@ -21,8 +21,7 @@ public sealed class TrayApp : ApplicationContext
 
     public TrayApp()
     {
-        Exception? settingsLoadError;
-        (_settings, settingsLoadError) = AppSettings.Load();
+        (_settings, var settingsLoadError) = AppSettings.Load();
 
         _idleIcon = LoadIcon("WetFlow.Resources.mic_idle.ico");
         _recordingIcon = LoadIcon("WetFlow.Resources.mic_recording.ico");
@@ -36,7 +35,7 @@ public sealed class TrayApp : ApplicationContext
         };
 
         if (settingsLoadError != null)
-            WarnSettingsLoadFailed(settingsLoadError);
+            WarnSettingsLoadFailed();
 
         _uiContext = SynchronizationContext.Current ?? new WindowsFormsSynchronizationContext();
 
@@ -226,7 +225,7 @@ public sealed class TrayApp : ApplicationContext
         catch { }
     }
 
-    private void WarnSettingsLoadFailed(Exception ex) =>
+    private void WarnSettingsLoadFailed() =>
         _tray.ShowBalloonTip(5000, "WetFlow Warning",
             $"Failed to load settings, using defaults. (see {LogPath})",
             ToolTipIcon.Warning);
@@ -236,10 +235,9 @@ public sealed class TrayApp : ApplicationContext
         _hook.Uninstall();
         using var form = new SettingsForm(_settings);
         form.ShowDialog();
-        var (reloadedSettings, reloadError) = AppSettings.Load();
-        _settings = reloadedSettings;
+        (_settings, var reloadError) = AppSettings.Load();
         if (reloadError != null)
-            WarnSettingsLoadFailed(reloadError);
+            WarnSettingsLoadFailed();
 
         // Rebind hook to the (possibly changed) hotkey.
         _hook.Dispose();
