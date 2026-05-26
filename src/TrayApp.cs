@@ -87,9 +87,9 @@ public sealed class TrayApp : ApplicationContext
         var menu = new ContextMenuStrip();
         menu.Items.Add("Settings", null, OnSettings);
         var overlayToggle = new ToolStripMenuItem("Show overlay") { Checked = _settings.ShowOverlay, CheckOnClick = true };
-        overlayToggle.CheckedChanged += (s, _) =>
+        overlayToggle.CheckedChanged += (_, _) =>
         {
-            _settings.ShowOverlay = ((ToolStripMenuItem)s!).Checked;
+            _settings.ShowOverlay = overlayToggle.Checked;
             _settings.Save();
             if (!_settings.ShowOverlay)
                 _overlay.HideOverlay();
@@ -222,7 +222,6 @@ public sealed class TrayApp : ApplicationContext
         form.ShowDialog();
         _settings = AppSettings.Load();
 
-        // Rebind hook to the (possibly changed) hotkey.
         _hook.Dispose();
         _hook = new KeyboardHook(_settings.HotkeyVKey);
         _hook.KeyDown += OnKeyDown;
