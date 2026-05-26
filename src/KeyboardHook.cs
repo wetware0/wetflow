@@ -64,7 +64,7 @@ public sealed class KeyboardHook : IDisposable
                     return (IntPtr)1; // suppress
                 }
                 // Suppress repeat key-down events while recording
-                if ((msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN) && _recording)
+                if (msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN)
                     return (IntPtr)1;
             }
             else if (vkCode == VK_ESCAPE && IsCancellable)
