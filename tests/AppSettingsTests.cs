@@ -27,6 +27,7 @@ public class AppSettingsTests
         Assert.True(settings.ShowOverlay);
         Assert.Equal(0.5, settings.ShortPauseSecs);
         Assert.Equal(1.5, settings.LongPauseSecs);
+        Assert.False(settings.UseToggleMode);
     }
 
     [Fact]
@@ -49,5 +50,25 @@ public class AppSettingsTests
 
         Assert.Equal(0.3, loaded.ShortPauseSecs);
         Assert.Equal(2.0, loaded.LongPauseSecs);
+    }
+
+    [Fact]
+    public void AppSettings_RoundTrip_PreservesToggleMode()
+    {
+        var original = new AppSettings { UseToggleMode = true };
+        var json = JsonSerializer.Serialize(original);
+        var loaded = JsonSerializer.Deserialize<AppSettings>(json)!;
+
+        Assert.True(loaded.UseToggleMode);
+    }
+
+    [Fact]
+    public void AppSettings_RoundTrip_PreservesToggleModeWhenFalse()
+    {
+        var original = new AppSettings { UseToggleMode = false };
+        var json = JsonSerializer.Serialize(original);
+        var loaded = JsonSerializer.Deserialize<AppSettings>(json)!;
+
+        Assert.False(loaded.UseToggleMode);
     }
 }

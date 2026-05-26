@@ -51,7 +51,9 @@ public sealed class TrayApp : ApplicationContext
         _hook.Install();
     }
 
-    private string IdleTrayText => $"WetFlow — hold {(Keys)_settings.HotkeyVKey} to dictate";
+    private string IdleTrayText => _settings.UseToggleMode
+        ? $"WetFlow — press {(Keys)_settings.HotkeyVKey} to dictate"
+        : $"WetFlow — hold {(Keys)_settings.HotkeyVKey} to dictate";
 
     private void PositionOverlay()
     {
@@ -95,7 +97,12 @@ public sealed class TrayApp : ApplicationContext
 
     private void OnKeyDown()
     {
-        if (_busy || _recording) return;
+        if (_busy) return;
+        if (_recording)
+        {
+            if (_settings.UseToggleMode) OnKeyUp(intentionalStop: true);
+            return;
+        }
         try
         {
             _recording = true;
@@ -112,9 +119,12 @@ public sealed class TrayApp : ApplicationContext
         }
     }
 
-    private void OnKeyUp()
+    private void OnKeyUp() => OnKeyUp(intentionalStop: false);
+
+    private void OnKeyUp(bool intentionalStop)
     {
         if (_busy || !_recording) return;
+        if (_settings.UseToggleMode && !intentionalStop) return;
         _recording = false;
         _busy = true;
         Task.Run(async () =>
@@ -153,7 +163,7 @@ public sealed class TrayApp : ApplicationContext
 
     private void OnOverlayRecordToggle(object? sender, EventArgs e)
     {
-        if (_recording) OnKeyUp();
+        if (_recording) OnKeyUp(intentionalStop: true);
         else OnKeyDown();
     }
 

@@ -11,6 +11,7 @@ public class AppSettings
     public bool ShowOverlay { get; set; } = true;
     public double ShortPauseSecs { get; set; } = 0.5;
     public double LongPauseSecs { get; set; } = 1.5;
+    public bool UseToggleMode { get; set; }
 
     private static readonly string SettingsPath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
@@ -26,7 +27,10 @@ public class AppSettings
                 return JsonSerializer.Deserialize<AppSettings>(json) ?? new AppSettings();
             }
         }
-        catch { }
+        catch (Exception ex)
+        {
+            TrayApp.LogError(ex);
+        }
         return new AppSettings();
     }
 

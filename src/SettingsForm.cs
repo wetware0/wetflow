@@ -9,6 +9,7 @@ public class SettingsForm : Form
     private NumericUpDown _shortPauseInput = null!;
     private NumericUpDown _longPauseInput = null!;
     private Button _saveButton = null!;
+    private CheckBox _toggleCheckBox = null!;
     private int _pendingVKey;
     private bool _capturing;
 
@@ -26,7 +27,7 @@ public class SettingsForm : Form
         MaximizeBox = false;
         MinimizeBox = false;
         StartPosition = FormStartPosition.CenterScreen;
-        ClientSize = new Size(320, 278);
+        ClientSize = new Size(320, 322);
 
         var hotkeyGroupLabel = new Label { Text = "Push-to-talk hotkey:", Left = 16, Top = 16, Width = 140, AutoSize = true };
         _hotkeyLabel = new Label { Left = 16, Top = 38, Width = 180, Height = 24, BorderStyle = BorderStyle.FixedSingle, TextAlign = ContentAlignment.MiddleLeft };
@@ -46,11 +47,18 @@ public class SettingsForm : Form
         var longPauseLabel = new Label { Text = "Long pause (sec):", Left = 16, Top = 184, Width = 140, AutoSize = true };
         _longPauseInput = new NumericUpDown { Left = 16, Top = 206, Width = 80, Minimum = 0.1M, Maximum = 10.0M, DecimalPlaces = 1, Increment = 0.1M, Value = (decimal)_settings.LongPauseSecs };
 
-        _saveButton = new Button { Text = "Save", Left = 220, Top = 238, Width = 80, Height = 28, DialogResult = DialogResult.OK };
+        _toggleCheckBox = new CheckBox
+        {
+            Text = "Toggle mode (press once to start, press again to stop)",
+            Left = 16, Top = 240, Width = 284, Height = 34,
+            Checked = _settings.UseToggleMode
+        };
+
+        _saveButton = new Button { Text = "Save", Left = 220, Top = 284, Width = 80, Height = 28, DialogResult = DialogResult.OK };
         _saveButton.Click += OnSave;
         AcceptButton = _saveButton;
 
-        Controls.AddRange(new Control[] { hotkeyGroupLabel, _hotkeyLabel, _captureButton, modelGroupLabel, _modelCombo, shortPauseLabel, _shortPauseInput, longPauseLabel, _longPauseInput, _saveButton });
+        Controls.AddRange(new Control[] { hotkeyGroupLabel, _hotkeyLabel, _captureButton, modelGroupLabel, _modelCombo, shortPauseLabel, _shortPauseInput, longPauseLabel, _longPauseInput, _toggleCheckBox, _saveButton });
         KeyPreview = true;
     }
 
@@ -88,6 +96,7 @@ public class SettingsForm : Form
         _settings.WhisperModel = _modelCombo.SelectedItem?.ToString() ?? "base";
         _settings.ShortPauseSecs = (double)_shortPauseInput.Value;
         _settings.LongPauseSecs = (double)_longPauseInput.Value;
+        _settings.UseToggleMode = _toggleCheckBox.Checked;
         _settings.Save();
     }
 }
