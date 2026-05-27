@@ -4,7 +4,14 @@ Push-to-talk transcription for Windows. Hold **F12**, speak, release — transcr
 
 ## Download
 
-Pre-built releases for Windows 10/11 (x64) are available on the [Releases page](https://github.com/wetware0/wetflow/releases). Download the latest `WetFlow-vX.Y.Z-win-x64.zip`, extract it, and run `WetFlow.exe`. No .NET installation required.
+Pre-built releases for Windows 10/11 (x64) are available on the [Releases page](https://github.com/wetware0/wetflow/releases). No .NET installation required.
+
+1. Download the latest `WetFlow-vX.Y.Z-win-x64.zip` from the Releases page.
+2. Right-click the ZIP → **Extract All…** and choose a permanent folder (e.g. `C:\Program Files\WetFlow` or `%LOCALAPPDATA%\WetFlow`). Don't run it directly from the ZIP.
+3. Open the extracted folder and double-click **WetFlow.exe**.
+4. Windows may show a SmartScreen warning ("Windows protected your PC") because the exe is unsigned — click **More info → Run anyway**.
+5. WetFlow appears in the system tray (bottom-right). On first launch it downloads the Whisper `base` model (~150 MB) — the tray tooltip will show "Downloading…" until it's ready.
+6. Hold **F12**, speak, then release. Transcribed text is injected at the cursor.
 
 ## How it works
 
