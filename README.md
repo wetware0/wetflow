@@ -2,6 +2,10 @@
 
 Push-to-talk transcription for Windows. Hold **F12**, speak, release — transcribed text is injected at the cursor. Runs entirely locally; no API key or internet connection required after first launch.
 
+## Download
+
+Pre-built releases for Windows 10/11 (x64) are available on the [Releases page](https://github.com/wetware0/wetflow/releases). Download the latest `WetFlow-vX.Y.Z-win-x64.zip`, extract it, and run `WetFlow.exe`. No .NET installation required.
+
 ## How it works
 
 Push-to-talk (default):
@@ -18,9 +22,12 @@ Audio is captured via WASAPI, resampled to 16 kHz mono, and transcribed by [Whis
 
 ## Requirements
 
-- Windows 10/11
-- [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8) (to build)
+To **run** (pre-built release):
+- Windows 10/11 (x64)
 - A microphone
+
+To **build from source**:
+- [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8)
 
 ## Build & run
 
@@ -35,8 +42,17 @@ On first use, the Whisper `base` model (~150 MB) is downloaded automatically to 
 
 ## Run on login
 
-Right-click the tray icon and choose **Settings**, or create a shortcut in your Startup folder:
+Right-click the tray icon and choose **Settings**, or create a startup shortcut:
 
+**Pre-built release** (replace path with where you extracted the ZIP):
+```powershell
+$exe = "C:\Path\To\WetFlow\WetFlow.exe"
+$lnk = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup\WetFlow.lnk"
+$wsh = New-Object -ComObject WScript.Shell
+$s = $wsh.CreateShortcut($lnk); $s.TargetPath = $exe; $s.Save()
+```
+
+**Build from source** (run from repo root after building):
 ```powershell
 $exe = "$PWD\src\bin\Release\net8.0-windows\WetFlow.exe"
 $lnk = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup\WetFlow.lnk"
@@ -83,6 +99,17 @@ src/
   Transcriber.cs    — Whisper.net local transcription, model auto-download
   TrayApp.cs        — orchestrator, tray icon, pipeline coordination
 ```
+
+## Releasing
+
+To publish a new release, push a version tag:
+
+```powershell
+git tag v1.0.1
+git push origin v1.0.1
+```
+
+GitHub Actions will run tests, build a self-contained `win-x64` ZIP, and create a GitHub release automatically.
 
 ## License
 
