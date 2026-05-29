@@ -253,11 +253,10 @@ public sealed class TrayApp : ApplicationContext
             Directory.CreateDirectory(FailedAudioDir);
             var dest = Path.Combine(FailedAudioDir, $"wetflow_{DateTime.Now:yyyyMMdd_HHmmss_fff}.wav");
             File.Move(wavPath, dest);
-            var msg = errorContext != null
-                ? $"{errorContext}\nAudio saved to {dest}"
-                : $"Audio saved to {dest}";
-            var icon = errorContext != null ? ToolTipIcon.Error : ToolTipIcon.Info;
-            var title = errorContext != null ? "WetFlow Error" : "WetFlow";
+            var isError = errorContext != null;
+            var title = isError ? "WetFlow Error" : "WetFlow";
+            var icon = isError ? ToolTipIcon.Error : ToolTipIcon.Info;
+            var msg = isError ? $"{errorContext}\nAudio saved to {dest}" : $"Audio saved to {dest}";
             _tray.ShowBalloonTip(8000, title, msg, icon);
         }
         catch (Exception ex)
