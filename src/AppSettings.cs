@@ -12,6 +12,7 @@ public class AppSettings
     public double ShortPauseSecs { get; set; } = 0.5;
     public double LongPauseSecs { get; set; } = 1.5;
     public bool UseToggleMode { get; set; } = true;
+    public bool UseGpu { get; set; } = false;
 
     private static readonly string SettingsPath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),

@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 namespace WetFlow;
 
 public sealed class TrayApp : ApplicationContext
@@ -140,15 +142,19 @@ public sealed class TrayApp : ApplicationContext
             string? wavPath = null;
             try
             {
+                var sw = Stopwatch.StartNew();
                 wavPath = _recorder.Stop();
                 if (wavPath == null)
                     return;
+                Log($"[TIMING] recorder-stop→wav-ready: {sw.ElapsedMilliseconds} ms");
 
                 _tray.Text = "WetFlow — transcribing…";
                 if (_settings.ShowOverlay) _overlay.ShowTranscribing();
 
+                sw.Restart();
                 var text = await _transcriber.TranscribeAsync(wavPath, _settings.WhisperModel,
-                    _settings.ShortPauseSecs, _settings.LongPauseSecs, token);
+                    _settings.ShortPauseSecs, _settings.LongPauseSecs, _settings.UseGpu, token);
+                Log($"[TIMING] wav-ready→transcription-complete: {sw.ElapsedMilliseconds} ms");
 
                 if (!string.IsNullOrWhiteSpace(text))
                     await TextInjector.InjectAsync(text);
@@ -206,6 +212,16 @@ public sealed class TrayApp : ApplicationContext
         {
             Directory.CreateDirectory(Path.GetDirectoryName(LogPath)!);
             File.AppendAllText(LogPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {ex}{Environment.NewLine}{Environment.NewLine}");
+        }
+        catch { }
+    }
+
+    internal static void Log(string message)
+    {
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(LogPath)!);
+            File.AppendAllText(LogPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {message}{Environment.NewLine}");
         }
         catch { }
     }

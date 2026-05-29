@@ -10,6 +10,7 @@ public class SettingsForm : Form
     private NumericUpDown _longPauseInput = null!;
     private Button _saveButton = null!;
     private CheckBox _toggleCheckBox = null!;
+    private CheckBox _gpuCheckBox = null!;
     private int _pendingVKey;
     private bool _capturing;
 
@@ -27,7 +28,7 @@ public class SettingsForm : Form
         MaximizeBox = false;
         MinimizeBox = false;
         StartPosition = FormStartPosition.CenterScreen;
-        ClientSize = new Size(320, 322);
+        ClientSize = new Size(320, 370);
 
         var hotkeyGroupLabel = new Label { Text = "Push-to-talk hotkey:", Left = 16, Top = 16, Width = 140, AutoSize = true };
         _hotkeyLabel = new Label { Left = 16, Top = 38, Width = 180, Height = 24, BorderStyle = BorderStyle.FixedSingle, TextAlign = ContentAlignment.MiddleLeft };
@@ -37,7 +38,7 @@ public class SettingsForm : Form
 
         var modelGroupLabel = new Label { Text = "Whisper model:", Left = 16, Top = 76, Width = 140, AutoSize = true };
         _modelCombo = new ComboBox { Left = 16, Top = 98, Width = 140, DropDownStyle = ComboBoxStyle.DropDownList };
-        _modelCombo.Items.AddRange(new object[] { "tiny", "base", "small", "medium" });
+        _modelCombo.Items.AddRange(new object[] { "tiny", "base", "base.en", "base-q5_1", "small", "small.en", "small-q5_1", "medium" });
         _modelCombo.SelectedItem = _settings.WhisperModel;
         if (_modelCombo.SelectedIndex < 0) _modelCombo.SelectedIndex = 1;
 
@@ -54,11 +55,18 @@ public class SettingsForm : Form
             Checked = _settings.UseToggleMode
         };
 
-        _saveButton = new Button { Text = "Save", Left = 220, Top = 284, Width = 80, Height = 28, DialogResult = DialogResult.OK };
+        _gpuCheckBox = new CheckBox
+        {
+            Text = "Use GPU (NVIDIA CUDA)",
+            Left = 16, Top = 280, Width = 284, Height = 24,
+            Checked = _settings.UseGpu
+        };
+
+        _saveButton = new Button { Text = "Save", Left = 220, Top = 332, Width = 80, Height = 28, DialogResult = DialogResult.OK };
         _saveButton.Click += OnSave;
         AcceptButton = _saveButton;
 
-        Controls.AddRange(new Control[] { hotkeyGroupLabel, _hotkeyLabel, _captureButton, modelGroupLabel, _modelCombo, shortPauseLabel, _shortPauseInput, longPauseLabel, _longPauseInput, _toggleCheckBox, _saveButton });
+        Controls.AddRange(new Control[] { hotkeyGroupLabel, _hotkeyLabel, _captureButton, modelGroupLabel, _modelCombo, shortPauseLabel, _shortPauseInput, longPauseLabel, _longPauseInput, _toggleCheckBox, _gpuCheckBox, _saveButton });
         KeyPreview = true;
     }
 
@@ -97,6 +105,7 @@ public class SettingsForm : Form
         _settings.ShortPauseSecs = (double)_shortPauseInput.Value;
         _settings.LongPauseSecs = (double)_longPauseInput.Value;
         _settings.UseToggleMode = _toggleCheckBox.Checked;
+        _settings.UseGpu = _gpuCheckBox.Checked;
         _settings.Save();
     }
 }
