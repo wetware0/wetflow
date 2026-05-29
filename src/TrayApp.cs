@@ -152,6 +152,7 @@ public sealed class TrayApp : ApplicationContext
                 if (_settings.ShowOverlay) _overlay.ShowTranscribing();
 
                 sw.Restart();
+                // On first run this includes model download; subsequent calls measure transcription only.
                 var text = await _transcriber.TranscribeAsync(wavPath, _settings.WhisperModel,
                     _settings.ShortPauseSecs, _settings.LongPauseSecs, _settings.UseGpu, token);
                 Log($"[TIMING] wav-ready→transcription-complete: {sw.ElapsedMilliseconds} ms");

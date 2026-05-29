@@ -219,12 +219,12 @@ public sealed class Transcriber : IDisposable
 
     private async Task EnsureInitializedAsync(string modelName, bool useGpu)
     {
-        if (_currentModelName == modelName && _currentUseGpu == useGpu) return;
+        if (_currentModelName == modelName && _currentUseGpu == useGpu && _processor != null) return;
 
         await _initLock.WaitAsync();
         try
         {
-            if (_currentModelName == modelName && _currentUseGpu == useGpu) return;
+            if (_currentModelName == modelName && _currentUseGpu == useGpu && _processor != null) return;
 
             // Dispose old processor + factory when config changes
             if (_processor != null) { await _processor.DisposeAsync(); _processor = null; }
@@ -258,7 +258,8 @@ public sealed class Transcriber : IDisposable
                 }
                 catch (Exception ex)
                 {
-                    TrayApp.Log($"GPU init failed, falling back to CPU: {ex.Message}");
+                    TrayApp.Log($"GPU init failed, falling back to CPU: {ex}");
+                    StatusChanged?.Invoke("GPU unavailable — using CPU");
                     _factory = WhisperFactory.FromPath(modelPath);
                 }
             }
@@ -278,9 +279,10 @@ public sealed class Transcriber : IDisposable
         }
     }
 
-    private static (GgmlType Type, QuantizationType Quant) ParseModel(string modelName) => modelName switch
+    internal static (GgmlType Type, QuantizationType Quant) ParseModel(string modelName) => modelName switch
     {
         "tiny" => (GgmlType.Tiny, QuantizationType.NoQuantization),
+        "base" => (GgmlType.Base, QuantizationType.NoQuantization),
         "base.en" => (GgmlType.BaseEn, QuantizationType.NoQuantization),
         "base-q5_1" => (GgmlType.Base, QuantizationType.Q5_1),
         "small" => (GgmlType.Small, QuantizationType.NoQuantization),
@@ -292,7 +294,7 @@ public sealed class Transcriber : IDisposable
 
     public void Dispose()
     {
-        _processor?.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        _processor?.DisposeAsync().AsTask().ConfigureAwait(false).GetAwaiter().GetResult();
         _factory?.Dispose();
         _initLock.Dispose();
     }
