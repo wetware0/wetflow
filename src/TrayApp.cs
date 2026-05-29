@@ -231,6 +231,8 @@ public sealed class TrayApp : ApplicationContext
                             : null;
                         SaveAudioForRecovery(wavPath, errorContext);
                     }
+                    else if (!wasCancelled)
+                        SaveAudioForRecovery(wavPath, notify: false);
                     else
                         try { File.Delete(wavPath); } catch (Exception) { }
                 }
@@ -306,26 +308,42 @@ public sealed class TrayApp : ApplicationContext
             $"Failed to load settings, using defaults. (see {LogPath})",
             ToolTipIcon.Warning);
 
-    private void SaveAudioForRecovery(string wavPath, string? errorContext = null)
+    private void SaveAudioForRecovery(string wavPath, string? errorContext = null, bool notify = true)
     {
         try
         {
             Directory.CreateDirectory(FailedAudioDir);
             var dest = Path.Combine(FailedAudioDir, $"wetflow_{DateTime.Now:yyyyMMdd_HHmmss_fff}.wav");
             File.Move(wavPath, dest);
-            var isError = errorContext != null;
-            var title = isError ? "WetFlow Error" : "WetFlow";
-            var icon = isError ? ToolTipIcon.Error : ToolTipIcon.Info;
-            var msg = isError ? $"{errorContext}\nAudio saved to {dest}" : $"Audio saved to {dest}";
-            _tray.ShowBalloonTip(8000, title, msg, icon);
+            try { PruneOldAudioFiles(FailedAudioDir); }
+            catch (Exception pruneEx) { LogError(pruneEx); }
+            if (notify)
+            {
+                var isError = errorContext != null;
+                var title = isError ? "WetFlow Error" : "WetFlow";
+                var icon = isError ? ToolTipIcon.Error : ToolTipIcon.Info;
+                var msg = isError ? $"{errorContext}\nAudio saved to {dest}" : $"Audio saved to {dest}";
+                _uiContext.Post(_ => _tray.ShowBalloonTip(8000, title, msg, icon), null);
+            }
         }
         catch (Exception ex)
         {
             LogError(ex);
-            _tray.ShowBalloonTip(8000, "WetFlow Warning",
-                $"Could not save audio for recovery: {ex.Message} (see {LogPath})", ToolTipIcon.Warning);
+            if (notify)
+                _uiContext.Post(_ => _tray.ShowBalloonTip(8000, "WetFlow Warning",
+                    $"Could not save audio for recovery: {ex.Message} (see {LogPath})", ToolTipIcon.Warning), null);
             try { File.Delete(wavPath); } catch { }
         }
+    }
+
+    internal static void PruneOldAudioFiles(string dir, int keep = 3)
+    {
+        var files = new DirectoryInfo(dir).GetFiles("*.wav")
+            .OrderByDescending(f => f.LastWriteTime)
+            .Skip(keep)
+            .ToArray();
+        foreach (var f in files)
+            try { f.Delete(); } catch { }
     }
 
     private void OnSettings(object? sender, EventArgs e)
