@@ -51,7 +51,8 @@ public static class TextInjector
                 break;
             case OutputMode.KeyboardAndClipboard:
                 TrySendInput(text);
-                await SetClipboardAsync(text);
+                try { await SetClipboardAsync(text); }
+                catch (InvalidOperationException ex) { TrayApp.Log($"[WARN] Clipboard write failed in KeyboardAndClipboard mode: {ex.Message}"); }
                 break;
         }
     }
@@ -87,8 +88,23 @@ public static class TextInjector
         {
             try
             {
-                Clipboard.SetText(text);
-                tcs.SetResult();
+                // Clipboard.SetText can silently no-op under OLE contention
+                // (another app holding the clipboard open), so read back and
+                // retry until the clipboard actually contains the text.
+                const int maxAttempts = 5;
+                for (int attempt = 0; attempt < maxAttempts; attempt++)
+                {
+                    Clipboard.SetText(text);
+                    if (Clipboard.GetText() == text)
+                    {
+                        tcs.SetResult();
+                        return;
+                    }
+                    if (attempt < maxAttempts - 1)
+                        Thread.Sleep(50);
+                }
+                tcs.SetException(new InvalidOperationException(
+                    "Clipboard was not updated after multiple attempts — possible OLE contention."));
             }
             catch (Exception ex)
             {
@@ -96,6 +112,7 @@ public static class TextInjector
             }
         });
         thread.SetApartmentState(ApartmentState.STA);
+        thread.IsBackground = true;
         thread.Start();
         await tcs.Task;
     }
