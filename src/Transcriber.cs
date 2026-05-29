@@ -8,7 +8,6 @@ namespace WetFlow;
 public sealed class Transcriber : IDisposable
 {
     private WhisperFactory? _factory;
-    private WhisperProcessor? _processor;
     private string? _currentModelName;
     private bool _currentUseGpu;
     private readonly SemaphoreSlim _initLock = new(1, 1);
@@ -23,15 +22,19 @@ public sealed class Transcriber : IDisposable
         await EnsureInitializedAsync(modelName, useGpu);
         cancellationToken.ThrowIfCancellationRequested();
 
-        if (_processor == null)
+        if (_factory == null)
             return string.Empty;
+
+        // Create a fresh processor per transcription so the model's inference
+        // context window does not carry over between recordings.
+        await using var processor = _factory.CreateBuilder().WithLanguage("auto").Build();
 
         var chunks = BuildChunks(wavPath, shortPauseSecs, longPauseSecs);
 
         if (chunks.Count == 1 && chunks[0].ChunkPath == wavPath)
         {
             using var fileStream = File.OpenRead(wavPath);
-            var segments = await TranscribeStreamAsync(fileStream, cancellationToken);
+            var segments = await TranscribeStreamAsync(processor, fileStream, cancellationToken);
             return FormatSegments(segments, shortPauseSecs, longPauseSecs);
         }
 
@@ -46,7 +49,7 @@ public sealed class Transcriber : IDisposable
                     carrySep = sepBefore;
 
                 using var fs = File.OpenRead(chunkPath);
-                var segs = await TranscribeStreamAsync(fs, cancellationToken);
+                var segs = await TranscribeStreamAsync(processor, fs, cancellationToken);
                 var text = FormatSegments(segs, shortPauseSecs, longPauseSecs).Trim();
 
                 if (!string.IsNullOrWhiteSpace(text))
@@ -207,12 +210,12 @@ public sealed class Transcriber : IDisposable
         w.Write(pcm, offset, length);
     }
 
-    private async Task<List<(string Text, TimeSpan Start, TimeSpan End)>> TranscribeStreamAsync(
-        Stream stream, CancellationToken ct)
+    private static async Task<List<(string Text, TimeSpan Start, TimeSpan End)>> TranscribeStreamAsync(
+        WhisperProcessor processor, Stream stream, CancellationToken ct)
     {
         var sw = Stopwatch.StartNew();
         var segs = new List<(string Text, TimeSpan Start, TimeSpan End)>();
-        await foreach (var seg in _processor!.ProcessAsync(stream).WithCancellation(ct))
+        await foreach (var seg in processor.ProcessAsync(stream).WithCancellation(ct))
             if (!seg.Text.Contains("[BLANK_AUDIO]", StringComparison.Ordinal))
                 segs.Add((seg.Text, seg.Start, seg.End));
         TrayApp.Log($"[TIMING] chunk-transcription: {sw.ElapsedMilliseconds} ms");
@@ -221,15 +224,15 @@ public sealed class Transcriber : IDisposable
 
     private async Task EnsureInitializedAsync(string modelName, bool useGpu)
     {
-        if (_currentModelName == modelName && _currentUseGpu == useGpu && _processor != null) return;
+        if (_currentModelName == modelName && _currentUseGpu == useGpu && _factory != null) return;
 
         await _initLock.WaitAsync();
         try
         {
-            if (_currentModelName == modelName && _currentUseGpu == useGpu && _processor != null) return;
+            if (_currentModelName == modelName && _currentUseGpu == useGpu && _factory != null) return;
 
-            // Dispose old processor + factory when config changes
-            if (_processor != null) { await _processor.DisposeAsync(); _processor = null; }
+            // Dispose old factory when config changes; the processor is created
+            // fresh per transcription, so there is none to dispose here.
             _factory?.Dispose();
             _factory = null;
 
@@ -264,7 +267,8 @@ public sealed class Transcriber : IDisposable
             if (!useGpu)
                 _factory = WhisperFactory.FromPath(modelPath);
 
-            _processor = _factory!.CreateBuilder().WithLanguage("auto").Build();
+            // Do not create the processor here — it is created fresh per
+            // TranscribeAsync call to avoid context carryover between recordings.
             _currentModelName = modelName;
             _currentUseGpu = useGpu;
             StatusChanged?.Invoke("Ready");
@@ -290,7 +294,6 @@ public sealed class Transcriber : IDisposable
 
     public void Dispose()
     {
-        _processor?.DisposeAsync().AsTask().ConfigureAwait(false).GetAwaiter().GetResult();
         _factory?.Dispose();
         _initLock.Dispose();
     }
