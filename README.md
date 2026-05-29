@@ -18,12 +18,18 @@ Pre-built releases for Windows 10/11 (x64) are available on the [Releases page](
 Push-to-talk (default):
 ```
 [F12 ↓] → record mic  →  [F12 ↑] → Whisper transcribes → text injected at cursor
+                                                         → chime + balloon tip
+                                                         → tray icon turns green until you paste
 ```
 
 Toggle mode:
 ```
 [F12 ↓] → record mic  →  [F12 ↓ again] → Whisper transcribes → text injected at cursor
+                                                              → chime + balloon tip
+                                                              → tray icon turns green until you paste
 ```
+
+The green icon indicates the transcribed text is still on the clipboard. It reverts to the normal icon once you paste (or replace the clipboard contents). It does not appear when Output mode is set to `Keyboard only`.
 
 Audio is captured via WASAPI, resampled to 16 kHz mono, and transcribed by [Whisper.net](https://github.com/sandrohanea/whisper.net) using a local GGML model downloaded on first use (~150 MB for the default `base` model). Text is injected via `SendInput` (Unicode); the **Output mode** setting controls delivery — `Keyboard and clipboard` (default) also writes to the clipboard, `Keyboard only` skips the clipboard, and `Clipboard only` skips `SendInput` entirely (useful when the target app blocks `SendInput`).
 
@@ -102,14 +108,15 @@ Errors are logged to `%APPDATA%\wetflow\error.log` with full stack traces.
 
 ```
 src/
-  AppSettings.cs    — settings model, JSON load/save
-  AudioRecorder.cs  — WASAPI capture, resample to 16 kHz mono WAV
-  KeyboardHook.cs   — global low-level keyboard hook (WH_KEYBOARD_LL)
-  Program.cs        — entry point, single-instance mutex
-  SettingsForm.cs   — hotkey capture + model selection dialog
-  TextInjector.cs   — SendInput Unicode injection, OutputMode-controlled clipboard write
-  Transcriber.cs    — Whisper.net local transcription, model auto-download
-  TrayApp.cs        — orchestrator, tray icon, pipeline coordination
+  AppSettings.cs       — settings model, JSON load/save
+  AudioRecorder.cs     — WASAPI capture, resample to 16 kHz mono WAV
+  ClipboardMonitor.cs  — WM_CLIPBOARDUPDATE listener; detects when injected text is replaced
+  KeyboardHook.cs      — global low-level keyboard hook (WH_KEYBOARD_LL)
+  Program.cs           — entry point, single-instance mutex
+  SettingsForm.cs      — hotkey capture + model selection dialog
+  TextInjector.cs      — SendInput Unicode injection, OutputMode-controlled clipboard write
+  Transcriber.cs       — Whisper.net local transcription, model auto-download
+  TrayApp.cs           — orchestrator, tray icon, pipeline coordination
 ```
 
 ## Releasing
