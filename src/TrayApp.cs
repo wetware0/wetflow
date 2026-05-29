@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Media;
+using System.Runtime.InteropServices;
 
 namespace WetFlow;
 
@@ -12,8 +14,10 @@ public sealed class TrayApp : ApplicationContext
     private AppSettings _settings;
     private Icon _idleIcon = null!;
     private Icon _recordingIcon = null!;
+    private Icon _greenIcon = null!;
     private readonly RecordingStateMachine _sm;
     private CancellationTokenSource? _cts;
+    private readonly ClipboardMonitor _clipboardMonitor;
     private readonly SynchronizationContext _uiContext;
 
     private static readonly string LogPath = Path.Combine(
@@ -37,6 +41,10 @@ public sealed class TrayApp : ApplicationContext
 
         _idleIcon = LoadIcon("WetFlow.Resources.mic_idle.ico");
         _recordingIcon = LoadIcon("WetFlow.Resources.mic_recording.ico");
+        _greenIcon = TintIconGreen(_idleIcon);
+
+        _clipboardMonitor = new ClipboardMonitor();
+        _clipboardMonitor.ContentChanged += OnClipboardContentChanged;
 
         _tray = new NotifyIcon
         {
@@ -92,6 +100,32 @@ public sealed class TrayApp : ApplicationContext
         return stream != null ? new Icon(stream) : SystemIcons.Application;
     }
 
+    [DllImport("user32.dll")] private static extern bool DestroyIcon(IntPtr handle);
+
+    private static Icon TintIconGreen(Icon source)
+    {
+        using var original = source.ToBitmap();
+        using var tinted = new Bitmap(original.Width, original.Height);
+        using var g = Graphics.FromImage(tinted);
+        var colorMatrix = new System.Drawing.Imaging.ColorMatrix(new float[][]
+        {
+            new float[] { 0.3f, 0,    0,    0, 0 },
+            new float[] { 0,    1.0f, 0,    0, 0 },
+            new float[] { 0,    0,    0.3f, 0, 0 },
+            new float[] { 0,    0,    0,    1, 0 },
+            new float[] { 0,    0,    0,    0, 1 },
+        });
+        using var ia = new System.Drawing.Imaging.ImageAttributes();
+        ia.SetColorMatrix(colorMatrix);
+        g.DrawImage(original,
+            new Rectangle(0, 0, original.Width, original.Height),
+            0, 0, original.Width, original.Height,
+            GraphicsUnit.Pixel, ia);
+        var hIcon = tinted.GetHicon();
+        try { return (Icon)Icon.FromHandle(hIcon).Clone(); }
+        finally { DestroyIcon(hIcon); }
+    }
+
     private ContextMenuStrip BuildMenu()
     {
         var menu = new ContextMenuStrip();
@@ -124,6 +158,7 @@ public sealed class TrayApp : ApplicationContext
     {
         try
         {
+            _clipboardMonitor.Stop();
             _recorder.Start();
             _hook.IsCancellable = true;
             _tray.Icon = _recordingIcon;
@@ -148,6 +183,8 @@ public sealed class TrayApp : ApplicationContext
             string? text = null;
             bool wasCancelled = false;
             Exception? transcriptionError = null;
+            bool injected = false;
+            bool clipboardWritten = false;
             try
             {
                 var sw = Stopwatch.StartNew();
@@ -166,7 +203,11 @@ public sealed class TrayApp : ApplicationContext
                 Log($"[TIMING] wav-ready→transcription-complete: {sw.ElapsedMilliseconds} ms");
 
                 if (!string.IsNullOrWhiteSpace(text))
+                {
                     await TextInjector.InjectAsync(text, _settings.OutputMode);
+                    injected = true;
+                    clipboardWritten = _settings.OutputMode != OutputMode.KeyboardOnly;
+                }
             }
             catch (OperationCanceledException)
             {
@@ -195,9 +236,22 @@ public sealed class TrayApp : ApplicationContext
                 if (_settings.ShowOverlay) _overlay.HideOverlay();
                 _hook.IsCancellable = false;
                 _cts?.Dispose();
+                if (injected)
+                    SystemSounds.Asterisk.Play();
+
                 _uiContext.Post(_ =>
                 {
-                    _tray.Icon = _idleIcon;
+                    if (injected)
+                        _tray.ShowBalloonTip(1500, "WetFlow", "Transcription complete", ToolTipIcon.Info);
+
+                    if (clipboardWritten)
+                    {
+                        _tray.Icon = _greenIcon;
+                        _clipboardMonitor.Watch(text!);
+                    }
+                    else
+                        _tray.Icon = _idleIcon;
+
                     _tray.Text = IdleTrayText;
                     _sm.HandleTranscriptionComplete();
                 }, null);
@@ -220,6 +274,11 @@ public sealed class TrayApp : ApplicationContext
             _tray.Icon = _idleIcon;
             _tray.Text = IdleTrayText;
         }, null);
+    }
+
+    private void OnClipboardContentChanged()
+    {
+        _tray.Icon = _idleIcon;
     }
 
     private void OnOverlayPositionChanged(object? sender, EventArgs e)
@@ -304,8 +363,10 @@ public sealed class TrayApp : ApplicationContext
             _transcriber.Dispose();
             _overlay.Dispose();
             _tray.Dispose();
+            _clipboardMonitor.Dispose();
             _idleIcon.Dispose();
             _recordingIcon.Dispose();
+            _greenIcon.Dispose();
         }
         base.Dispose(disposing);
     }
