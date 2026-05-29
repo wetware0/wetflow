@@ -213,7 +213,8 @@ public sealed class Transcriber : IDisposable
         var sw = Stopwatch.StartNew();
         var segs = new List<(string Text, TimeSpan Start, TimeSpan End)>();
         await foreach (var seg in _processor!.ProcessAsync(stream).WithCancellation(ct))
-            segs.Add((seg.Text, seg.Start, seg.End));
+            if (!seg.Text.Contains("[BLANK_AUDIO]", StringComparison.Ordinal))
+                segs.Add((seg.Text, seg.Start, seg.End));
         TrayApp.Log($"[TIMING] chunk-transcription: {sw.ElapsedMilliseconds} ms");
         return segs;
     }
