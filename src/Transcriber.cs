@@ -30,13 +30,8 @@ public sealed class Transcriber : IDisposable
 
         if (chunks.Count == 1 && chunks[0].ChunkPath == wavPath)
         {
-            var singleSw = Stopwatch.StartNew();
             using var fileStream = File.OpenRead(wavPath);
-            var segments = new List<(string Text, TimeSpan Start, TimeSpan End)>();
-            await foreach (var segment in _processor!.ProcessAsync(fileStream).WithCancellation(cancellationToken))
-                segments.Add((segment.Text, segment.Start, segment.End));
-            singleSw.Stop();
-            TrayApp.Log($"[TIMING] chunk-transcription: {singleSw.ElapsedMilliseconds} ms");
+            var segments = await TranscribeStreamAsync(fileStream, cancellationToken);
             return FormatSegments(segments, shortPauseSecs, longPauseSecs);
         }
 
@@ -50,13 +45,8 @@ public sealed class Transcriber : IDisposable
                 if (sepBefore == "\n\n" || (carrySep != "\n\n" && sepBefore.Length > 0))
                     carrySep = sepBefore;
 
-                var chunkSw = Stopwatch.StartNew();
                 using var fs = File.OpenRead(chunkPath);
-                var segs = new List<(string Text, TimeSpan Start, TimeSpan End)>();
-                await foreach (var seg in _processor!.ProcessAsync(fs).WithCancellation(cancellationToken))
-                    segs.Add((seg.Text, seg.Start, seg.End));
-                chunkSw.Stop();
-                TrayApp.Log($"[TIMING] chunk-transcription: {chunkSw.ElapsedMilliseconds} ms");
+                var segs = await TranscribeStreamAsync(fs, cancellationToken);
                 var text = FormatSegments(segs, shortPauseSecs, longPauseSecs).Trim();
 
                 if (!string.IsNullOrWhiteSpace(text))
@@ -217,6 +207,17 @@ public sealed class Transcriber : IDisposable
         w.Write(pcm, offset, length);
     }
 
+    private async Task<List<(string Text, TimeSpan Start, TimeSpan End)>> TranscribeStreamAsync(
+        Stream stream, CancellationToken ct)
+    {
+        var sw = Stopwatch.StartNew();
+        var segs = new List<(string Text, TimeSpan Start, TimeSpan End)>();
+        await foreach (var seg in _processor!.ProcessAsync(stream).WithCancellation(ct))
+            segs.Add((seg.Text, seg.Start, seg.End));
+        TrayApp.Log($"[TIMING] chunk-transcription: {sw.ElapsedMilliseconds} ms");
+        return segs;
+    }
+
     private async Task EnsureInitializedAsync(string modelName, bool useGpu)
     {
         if (_currentModelName == modelName && _currentUseGpu == useGpu && _processor != null) return;
@@ -251,24 +252,18 @@ public sealed class Transcriber : IDisposable
             }
 
             if (useGpu)
-            {
-                try
-                {
-                    _factory = WhisperFactory.FromPath(modelPath, new WhisperFactoryOptions { UseGpu = true });
-                }
+                try { _factory = WhisperFactory.FromPath(modelPath, new WhisperFactoryOptions { UseGpu = true }); }
                 catch (Exception ex)
                 {
                     TrayApp.Log($"GPU init failed, falling back to CPU: {ex}");
                     StatusChanged?.Invoke("GPU unavailable — using CPU");
-                    _factory = WhisperFactory.FromPath(modelPath);
+                    useGpu = false;
                 }
-            }
-            else
-            {
-                _factory = WhisperFactory.FromPath(modelPath);
-            }
 
-            _processor = _factory.CreateBuilder().WithLanguage("auto").Build();
+            if (!useGpu)
+                _factory = WhisperFactory.FromPath(modelPath);
+
+            _processor = _factory!.CreateBuilder().WithLanguage("auto").Build();
             _currentModelName = modelName;
             _currentUseGpu = useGpu;
             StatusChanged?.Invoke("Ready");

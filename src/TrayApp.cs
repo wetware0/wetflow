@@ -19,6 +19,7 @@ public sealed class TrayApp : ApplicationContext
     private static readonly string LogPath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
         "wetflow", "error.log");
+    private static bool _logDirCreated;
 
     public TrayApp()
     {
@@ -207,21 +208,13 @@ public sealed class TrayApp : ApplicationContext
         _settings.Save();
     }
 
-    internal static void LogError(Exception ex)
-    {
-        try
-        {
-            Directory.CreateDirectory(Path.GetDirectoryName(LogPath)!);
-            File.AppendAllText(LogPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {ex}{Environment.NewLine}{Environment.NewLine}");
-        }
-        catch { }
-    }
+    internal static void LogError(Exception ex) => Log($"{ex}{Environment.NewLine}");
 
     internal static void Log(string message)
     {
         try
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(LogPath)!);
+            if (!_logDirCreated) { Directory.CreateDirectory(Path.GetDirectoryName(LogPath)!); _logDirCreated = true; }
             File.AppendAllText(LogPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {message}{Environment.NewLine}");
         }
         catch { }
