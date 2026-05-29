@@ -315,7 +315,8 @@ public sealed class TrayApp : ApplicationContext
             Directory.CreateDirectory(FailedAudioDir);
             var dest = Path.Combine(FailedAudioDir, $"wetflow_{DateTime.Now:yyyyMMdd_HHmmss_fff}.wav");
             File.Move(wavPath, dest);
-            PruneOldAudioFiles(FailedAudioDir);
+            try { PruneOldAudioFiles(FailedAudioDir); }
+            catch (Exception pruneEx) { LogError(pruneEx); }
             if (notify)
             {
                 var isError = errorContext != null;
