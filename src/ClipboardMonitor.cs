@@ -4,7 +4,7 @@ namespace WetFlow;
 
 internal sealed class ClipboardMonitor : IDisposable
 {
-    public event Action? ContentChanged;
+    internal event Action? ContentChanged;
 
     private string? _watchedText;
     private readonly MessageWindow _window;
@@ -14,7 +14,7 @@ internal sealed class ClipboardMonitor : IDisposable
         _window = new MessageWindow(OnClipboardUpdate);
     }
 
-    // Call on UI thread only. Updates watched text; idempotent if already watching.
+    // Call on UI thread only. Updates watched text; safe to call again (no-op if already registered).
     internal void Watch(string text)
     {
         _watchedText = text;
@@ -36,17 +36,16 @@ internal sealed class ClipboardMonitor : IDisposable
     private void OnClipboardUpdate()
     {
         if (_watchedText == null) return;
-        try
-        {
-            var current = Clipboard.GetText();
-            if (current != _watchedText)
-            {
-                _watchedText = null;
-                _window.Unregister();
-                ContentChanged?.Invoke();
-            }
-        }
-        catch { }
+
+        string? current;
+        try { current = Clipboard.GetText(); }
+        catch { return; }   // clipboard transiently locked — retry on next WM_CLIPBOARDUPDATE
+
+        if (current == _watchedText) return;
+
+        _watchedText = null;
+        _window.Unregister();
+        ContentChanged?.Invoke();
     }
 
     private sealed class MessageWindow : NativeWindow, IDisposable
@@ -68,8 +67,8 @@ internal sealed class ClipboardMonitor : IDisposable
         internal void Register()
         {
             if (_registered) return;
-            AddClipboardFormatListener(Handle);
-            _registered = true;
+            if (AddClipboardFormatListener(Handle))
+                _registered = true;
         }
 
         internal void Unregister()

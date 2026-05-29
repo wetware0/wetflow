@@ -122,6 +122,7 @@ public sealed class TrayApp : ApplicationContext
             0, 0, original.Width, original.Height,
             GraphicsUnit.Pixel, ia);
         var hIcon = tinted.GetHicon();
+        // Icon.FromHandle doesn't own the HICON; Clone() transfers ownership so we can free the raw handle.
         try { return (Icon)Icon.FromHandle(hIcon).Clone(); }
         finally { DestroyIcon(hIcon); }
     }
