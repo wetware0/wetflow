@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 namespace WetFlow;
 
 public sealed class TrayApp : ApplicationContext
@@ -17,6 +19,7 @@ public sealed class TrayApp : ApplicationContext
     private static readonly string LogPath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
         "wetflow", "error.log");
+    private static bool _logDirCreated;
 
     public TrayApp()
     {
@@ -140,15 +143,20 @@ public sealed class TrayApp : ApplicationContext
             string? wavPath = null;
             try
             {
+                var sw = Stopwatch.StartNew();
                 wavPath = _recorder.Stop();
                 if (wavPath == null)
                     return;
+                Log($"[TIMING] recorder-stop→wav-ready: {sw.ElapsedMilliseconds} ms");
 
                 _tray.Text = "WetFlow — transcribing…";
                 if (_settings.ShowOverlay) _overlay.ShowTranscribing();
 
+                sw.Restart();
+                // On first run this includes model download; subsequent calls measure transcription only.
                 var text = await _transcriber.TranscribeAsync(wavPath, _settings.WhisperModel,
-                    _settings.ShortPauseSecs, _settings.LongPauseSecs, token);
+                    _settings.ShortPauseSecs, _settings.LongPauseSecs, _settings.UseGpu, token);
+                Log($"[TIMING] wav-ready→transcription-complete: {sw.ElapsedMilliseconds} ms");
 
                 if (!string.IsNullOrWhiteSpace(text))
                     await TextInjector.InjectAsync(text);
@@ -200,12 +208,14 @@ public sealed class TrayApp : ApplicationContext
         _settings.Save();
     }
 
-    internal static void LogError(Exception ex)
+    internal static void LogError(Exception ex) => Log($"{ex}{Environment.NewLine}");
+
+    internal static void Log(string message)
     {
         try
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(LogPath)!);
-            File.AppendAllText(LogPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {ex}{Environment.NewLine}{Environment.NewLine}");
+            if (!_logDirCreated) { Directory.CreateDirectory(Path.GetDirectoryName(LogPath)!); _logDirCreated = true; }
+            File.AppendAllText(LogPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {message}{Environment.NewLine}");
         }
         catch { }
     }

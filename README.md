@@ -32,6 +32,7 @@ Audio is captured via WASAPI, resampled to 16 kHz mono, and transcribed by [Whis
 To **run** (pre-built release):
 - Windows 10/11 (x64)
 - A microphone
+- (Optional) NVIDIA GPU with CUDA support — required for the "Use GPU" setting
 
 To **build from source**:
 - [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8)
@@ -74,10 +75,11 @@ Right-click the tray icon → **Settings**:
 | Setting | Default | Notes |
 |---|---|---|
 | Hotkey | F12 | Any key; modifier keys (Shift, Ctrl, …) work but can cause sticky-key behavior |
-| Whisper model | `base` | `tiny` is faster; `small` / `medium` are more accurate but slower and larger |
+| Whisper model | `base` | `tiny` is fastest; `small` / `medium` are more accurate but slower and larger; `.en` variants (e.g. `base.en`) are English-only but faster; `-q5_1` variants are quantized (smaller download, marginal quality tradeoff) |
 | Short pause (sec) | `0.5` | Gap between Whisper segments that inserts a single newline (`\n`) in the output |
 | Long pause (sec) | `1.5` | Gap between segments that inserts a blank line (`\n\n`); gaps below short pause are joined with a space |
 | Toggle mode | Off | When on: press once to start, press again to stop. When off: hold to record, release to transcribe |
+| Use GPU | Off | When on, uses NVIDIA CUDA for transcription (requires compatible GPU); falls back to CPU silently if GPU init fails — check `%APPDATA%\wetflow\error.log` |
 
 Settings are saved to `%APPDATA%\wetflow\settings.json`.
 
@@ -92,6 +94,7 @@ Errors are logged to `%APPDATA%\wetflow\error.log` with full stack traces.
 | Text injected in wrong case | Target app is intercepting modifier keys — switch to a non-modifier hotkey |
 | App won't start (second instance) | Already running — check the system tray |
 | "WetFlow Warning" balloon on startup or after settings save | `settings.json` is corrupt or unreadable — app is using defaults. Check `%APPDATA%\wetflow\error.log` for details; delete `settings.json` to reset to defaults |
+| GPU enabled but transcription is still slow | GPU init failed and fell back to CPU — check `%APPDATA%\wetflow\error.log` for "GPU init failed"; verify NVIDIA drivers and CUDA are installed |
 
 ## Project structure
 

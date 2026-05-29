@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 using Whisper.net;
 using Whisper.net.Ggml;
@@ -7,31 +8,30 @@ namespace WetFlow;
 public sealed class Transcriber : IDisposable
 {
     private WhisperFactory? _factory;
+    private WhisperProcessor? _processor;
+    private string? _currentModelName;
+    private bool _currentUseGpu;
     private readonly SemaphoreSlim _initLock = new(1, 1);
-    private bool _initialized;
 
     public event Action<string>? StatusChanged;
 
     public async Task<string> TranscribeAsync(string wavPath, string modelName = "base",
         double shortPauseSecs = 0.5, double longPauseSecs = 1.5,
-        CancellationToken cancellationToken = default)
+        bool useGpu = false, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        await EnsureInitializedAsync(modelName);
+        await EnsureInitializedAsync(modelName, useGpu);
         cancellationToken.ThrowIfCancellationRequested();
 
-        if (_factory == null)
+        if (_processor == null)
             return string.Empty;
 
         var chunks = BuildChunks(wavPath, shortPauseSecs, longPauseSecs);
 
         if (chunks.Count == 1 && chunks[0].ChunkPath == wavPath)
         {
-            await using var processor = _factory.CreateBuilder().WithLanguage("auto").Build();
             using var fileStream = File.OpenRead(wavPath);
-            var segments = new List<(string Text, TimeSpan Start, TimeSpan End)>();
-            await foreach (var segment in processor.ProcessAsync(fileStream).WithCancellation(cancellationToken))
-                segments.Add((segment.Text, segment.Start, segment.End));
+            var segments = await TranscribeStreamAsync(fileStream, cancellationToken);
             return FormatSegments(segments, shortPauseSecs, longPauseSecs);
         }
 
@@ -45,11 +45,8 @@ public sealed class Transcriber : IDisposable
                 if (sepBefore == "\n\n" || (carrySep != "\n\n" && sepBefore.Length > 0))
                     carrySep = sepBefore;
 
-                await using var processor = _factory.CreateBuilder().WithLanguage("auto").Build();
                 using var fs = File.OpenRead(chunkPath);
-                var segs = new List<(string Text, TimeSpan Start, TimeSpan End)>();
-                await foreach (var seg in processor.ProcessAsync(fs).WithCancellation(cancellationToken))
-                    segs.Add((seg.Text, seg.Start, seg.End));
+                var segs = await TranscribeStreamAsync(fs, cancellationToken);
                 var text = FormatSegments(segs, shortPauseSecs, longPauseSecs).Trim();
 
                 if (!string.IsNullOrWhiteSpace(text))
@@ -210,22 +207,32 @@ public sealed class Transcriber : IDisposable
         w.Write(pcm, offset, length);
     }
 
-    private async Task EnsureInitializedAsync(string modelName)
+    private async Task<List<(string Text, TimeSpan Start, TimeSpan End)>> TranscribeStreamAsync(
+        Stream stream, CancellationToken ct)
     {
-        if (_initialized) return;
+        var sw = Stopwatch.StartNew();
+        var segs = new List<(string Text, TimeSpan Start, TimeSpan End)>();
+        await foreach (var seg in _processor!.ProcessAsync(stream).WithCancellation(ct))
+            segs.Add((seg.Text, seg.Start, seg.End));
+        TrayApp.Log($"[TIMING] chunk-transcription: {sw.ElapsedMilliseconds} ms");
+        return segs;
+    }
+
+    private async Task EnsureInitializedAsync(string modelName, bool useGpu)
+    {
+        if (_currentModelName == modelName && _currentUseGpu == useGpu && _processor != null) return;
 
         await _initLock.WaitAsync();
         try
         {
-            if (_initialized) return;
+            if (_currentModelName == modelName && _currentUseGpu == useGpu && _processor != null) return;
 
-            var modelType = modelName switch
-            {
-                "tiny" => GgmlType.Tiny,
-                "small" => GgmlType.Small,
-                "medium" => GgmlType.Medium,
-                _ => GgmlType.Base
-            };
+            // Dispose old processor + factory when config changes
+            if (_processor != null) { await _processor.DisposeAsync(); _processor = null; }
+            _factory?.Dispose();
+            _factory = null;
+
+            var (modelType, quantType) = ParseModel(modelName);
 
             var modelDir = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
@@ -239,13 +246,26 @@ public sealed class Transcriber : IDisposable
                 StatusChanged?.Invoke($"Downloading Whisper {modelName} model (first run)…");
                 using var httpClient = new System.Net.Http.HttpClient();
                 var downloader = new WhisperGgmlDownloader(httpClient);
-                var modelStream = await downloader.GetGgmlModelAsync(modelType);
+                var modelStream = await downloader.GetGgmlModelAsync(modelType, quantType);
                 using var fs = File.Create(modelPath);
                 await modelStream.CopyToAsync(fs);
             }
 
-            _factory = WhisperFactory.FromPath(modelPath);
-            _initialized = true;
+            if (useGpu)
+                try { _factory = WhisperFactory.FromPath(modelPath, new WhisperFactoryOptions { UseGpu = true }); }
+                catch (Exception ex)
+                {
+                    TrayApp.Log($"GPU init failed, falling back to CPU: {ex}");
+                    StatusChanged?.Invoke("GPU unavailable — using CPU");
+                    useGpu = false;
+                }
+
+            if (!useGpu)
+                _factory = WhisperFactory.FromPath(modelPath);
+
+            _processor = _factory!.CreateBuilder().WithLanguage("auto").Build();
+            _currentModelName = modelName;
+            _currentUseGpu = useGpu;
             StatusChanged?.Invoke("Ready");
         }
         finally
@@ -254,8 +274,22 @@ public sealed class Transcriber : IDisposable
         }
     }
 
+    internal static (GgmlType Type, QuantizationType Quant) ParseModel(string modelName) => modelName switch
+    {
+        "tiny" => (GgmlType.Tiny, QuantizationType.NoQuantization),
+        "base" => (GgmlType.Base, QuantizationType.NoQuantization),
+        "base.en" => (GgmlType.BaseEn, QuantizationType.NoQuantization),
+        "base-q5_1" => (GgmlType.Base, QuantizationType.Q5_1),
+        "small" => (GgmlType.Small, QuantizationType.NoQuantization),
+        "small.en" => (GgmlType.SmallEn, QuantizationType.NoQuantization),
+        "small-q5_1" => (GgmlType.Small, QuantizationType.Q5_1),
+        "medium" => (GgmlType.Medium, QuantizationType.NoQuantization),
+        _ => (GgmlType.Base, QuantizationType.NoQuantization)
+    };
+
     public void Dispose()
     {
+        _processor?.DisposeAsync().AsTask().ConfigureAwait(false).GetAwaiter().GetResult();
         _factory?.Dispose();
         _initLock.Dispose();
     }

@@ -28,6 +28,7 @@ public class AppSettingsTests
         Assert.Equal(0.5, settings.ShortPauseSecs);
         Assert.Equal(1.5, settings.LongPauseSecs);
         Assert.True(settings.UseToggleMode);
+        Assert.False(settings.UseGpu);
     }
 
     [Fact]
@@ -70,6 +71,26 @@ public class AppSettingsTests
         var loaded = JsonSerializer.Deserialize<AppSettings>(json)!;
 
         Assert.False(loaded.UseToggleMode);
+    }
+
+    [Fact]
+    public void AppSettings_RoundTrip_PreservesUseGpuWhenTrue()
+    {
+        var original = new AppSettings { UseGpu = true };
+        var json = JsonSerializer.Serialize(original);
+        var loaded = JsonSerializer.Deserialize<AppSettings>(json)!;
+
+        Assert.True(loaded.UseGpu);
+    }
+
+    [Fact]
+    public void AppSettings_RoundTrip_PreservesUseGpuWhenFalse()
+    {
+        var original = new AppSettings { UseGpu = false };
+        var json = JsonSerializer.Serialize(original);
+        var loaded = JsonSerializer.Deserialize<AppSettings>(json)!;
+
+        Assert.False(loaded.UseGpu);
     }
 
     [Fact]
