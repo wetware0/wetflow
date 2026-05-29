@@ -22,12 +22,16 @@ public sealed class Transcriber : IDisposable
         await EnsureInitializedAsync(modelName, useGpu);
         cancellationToken.ThrowIfCancellationRequested();
 
-        if (_factory == null)
+        var factory = _factory;
+        if (factory == null)
+        {
+            TrayApp.Log("[WARN] _factory is null at transcription start — returning empty.");
             return string.Empty;
+        }
 
         // Create a fresh processor per transcription so the model's inference
         // context window does not carry over between recordings.
-        await using var processor = _factory.CreateBuilder().WithLanguage("auto").Build();
+        await using var processor = factory.CreateBuilder().WithLanguage("auto").Build();
 
         var chunks = BuildChunks(wavPath, shortPauseSecs, longPauseSecs);
 

@@ -51,7 +51,8 @@ public static class TextInjector
                 break;
             case OutputMode.KeyboardAndClipboard:
                 TrySendInput(text);
-                await SetClipboardAsync(text);
+                try { await SetClipboardAsync(text); }
+                catch (InvalidOperationException ex) { TrayApp.Log($"[WARN] Clipboard write failed in KeyboardAndClipboard mode: {ex.Message}"); }
                 break;
         }
     }
@@ -111,6 +112,7 @@ public static class TextInjector
             }
         });
         thread.SetApartmentState(ApartmentState.STA);
+        thread.IsBackground = true;
         thread.Start();
         await tcs.Task;
     }
