@@ -11,7 +11,6 @@ public class TextInjectorTests
     {
         await TextInjector.InjectAsync("hello clipboard", OutputMode.ClipboardOnly);
 
-        string? captured = null;
         var tcs = new TaskCompletionSource<string>();
         var staThread = new Thread(() =>
         {
@@ -22,7 +21,7 @@ public class TextInjectorTests
         staThread.IsBackground = true;
         staThread.Start();
 
-        captured = await tcs.Task;
+        var captured = await tcs.Task;
         Assert.Equal("hello clipboard", captured);
     }
 }
