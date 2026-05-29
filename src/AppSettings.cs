@@ -2,6 +2,8 @@ using System.Text.Json;
 
 namespace WetFlow;
 
+// Ordinals are stable: KeyboardOnly=0, KeyboardAndClipboard=1, ClipboardOnly=2
+// Do NOT reorder or insert values — existing settings.json files store integer ordinals.
 public enum OutputMode
 {
     KeyboardOnly,

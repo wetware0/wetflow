@@ -145,7 +145,9 @@ public sealed class TrayApp : ApplicationContext
         Task.Run(async () =>
         {
             string? wavPath = null;
-            bool shouldPreserveAudio = false;
+            string? text = null;
+            bool wasCancelled = false;
+            Exception? transcriptionError = null;
             try
             {
                 var sw = Stopwatch.StartNew();
@@ -159,31 +161,34 @@ public sealed class TrayApp : ApplicationContext
 
                 sw.Restart();
                 // On first run this includes model download; subsequent calls measure transcription only.
-                var text = await _transcriber.TranscribeAsync(wavPath, _settings.WhisperModel,
+                text = await _transcriber.TranscribeAsync(wavPath, _settings.WhisperModel,
                     _settings.ShortPauseSecs, _settings.LongPauseSecs, _settings.UseGpu, token);
                 Log($"[TIMING] wav-ready→transcription-complete: {sw.ElapsedMilliseconds} ms");
 
-                if (string.IsNullOrWhiteSpace(text))
-                    shouldPreserveAudio = true;
-                else
+                if (!string.IsNullOrWhiteSpace(text))
                     await TextInjector.InjectAsync(text, _settings.OutputMode);
             }
             catch (OperationCanceledException)
             {
+                wasCancelled = true;
                 // Escape pressed — discard without injecting, audio deleted normally
             }
             catch (Exception ex)
             {
                 LogError(ex);
-                shouldPreserveAudio = true;
-                _tray.ShowBalloonTip(8000, "WetFlow Error", $"{ex.Message} (see {LogPath})", ToolTipIcon.Error);
+                transcriptionError = ex;
             }
             finally
             {
                 if (wavPath != null)
                 {
-                    if (shouldPreserveAudio)
-                        SaveAudioForRecovery(wavPath);
+                    if (ShouldPreserveAudio(text, wasCancelled, transcriptionError))
+                    {
+                        var errorContext = transcriptionError != null
+                            ? $"{transcriptionError.Message} (see {LogPath})"
+                            : null;
+                        SaveAudioForRecovery(wavPath, errorContext);
+                    }
                     else
                         try { File.Delete(wavPath); } catch (Exception) { }
                 }
@@ -199,6 +204,9 @@ public sealed class TrayApp : ApplicationContext
             }
         });
     }
+
+    internal static bool ShouldPreserveAudio(string? text, bool wasCancelled, Exception? transcriptionError)
+        => transcriptionError != null || (!wasCancelled && string.IsNullOrWhiteSpace(text));
 
     private void OnRecordingCancelled()
     {
@@ -238,18 +246,25 @@ public sealed class TrayApp : ApplicationContext
             $"Failed to load settings, using defaults. (see {LogPath})",
             ToolTipIcon.Warning);
 
-    private void SaveAudioForRecovery(string wavPath)
+    private void SaveAudioForRecovery(string wavPath, string? errorContext = null)
     {
         try
         {
             Directory.CreateDirectory(FailedAudioDir);
-            var dest = Path.Combine(FailedAudioDir, $"wetflow_{DateTime.Now:yyyyMMdd_HHmmss}.wav");
+            var dest = Path.Combine(FailedAudioDir, $"wetflow_{DateTime.Now:yyyyMMdd_HHmmss_fff}.wav");
             File.Move(wavPath, dest);
-            _tray.ShowBalloonTip(8000, "WetFlow", $"Audio saved to {dest}", ToolTipIcon.Info);
+            var msg = errorContext != null
+                ? $"{errorContext}\nAudio saved to {dest}"
+                : $"Audio saved to {dest}";
+            var icon = errorContext != null ? ToolTipIcon.Error : ToolTipIcon.Info;
+            var title = errorContext != null ? "WetFlow Error" : "WetFlow";
+            _tray.ShowBalloonTip(8000, title, msg, icon);
         }
         catch (Exception ex)
         {
             LogError(ex);
+            _tray.ShowBalloonTip(8000, "WetFlow Warning",
+                $"Could not save audio for recovery: {ex.Message} (see {LogPath})", ToolTipIcon.Warning);
             try { File.Delete(wavPath); } catch { }
         }
     }

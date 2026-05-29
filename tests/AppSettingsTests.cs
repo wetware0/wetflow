@@ -145,6 +145,16 @@ public class AppSettingsTests
     }
 
     [Fact]
+    public void AppSettings_Deserialize_MissingOutputMode_DefaultsToKeyboardAndClipboard()
+    {
+        // JSON from before OutputMode was added — field absent; verifies backward-compat default
+        var json = """{"HotkeyVKey":123,"WhisperModel":"base","OverlayX":-1,"OverlayY":-1,"ShowOverlay":true,"ShortPauseSecs":0.5,"LongPauseSecs":1.5,"UseToggleMode":true}""";
+        var loaded = JsonSerializer.Deserialize<AppSettings>(json)!;
+
+        Assert.Equal(OutputMode.KeyboardAndClipboard, loaded.OutputMode);
+    }
+
+    [Fact]
     public void Load_ReturnsSettings_WhenFileIsValid()
     {
         var path = Path.GetTempFileName();

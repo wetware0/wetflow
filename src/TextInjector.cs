@@ -43,12 +43,13 @@ public static class TextInjector
         switch (outputMode)
         {
             case OutputMode.KeyboardOnly:
-                TrySendInput(text);
+                if (!TrySendInput(text))
+                    throw new InvalidOperationException("SendInput failed — text could not be injected.");
                 break;
             case OutputMode.ClipboardOnly:
                 await SetClipboardAsync(text);
                 break;
-            default: // KeyboardAndClipboard
+            case OutputMode.KeyboardAndClipboard:
                 TrySendInput(text);
                 await SetClipboardAsync(text);
                 break;
@@ -84,8 +85,15 @@ public static class TextInjector
         // Clipboard must be accessed on STA thread
         var thread = new Thread(() =>
         {
-            try { Clipboard.SetText(text); }
-            finally { tcs.SetResult(); }
+            try
+            {
+                Clipboard.SetText(text);
+                tcs.SetResult();
+            }
+            catch (Exception ex)
+            {
+                tcs.SetException(ex);
+            }
         });
         thread.SetApartmentState(ApartmentState.STA);
         thread.Start();
