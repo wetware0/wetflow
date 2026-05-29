@@ -337,16 +337,12 @@ public sealed class TrayApp : ApplicationContext
 
     internal static void PruneOldAudioFiles(string dir, int keep = 3)
     {
-        try
-        {
-            var files = new DirectoryInfo(dir).GetFiles("*.wav")
-                .OrderByDescending(f => f.Name)
-                .Skip(keep)
-                .ToArray();
-            foreach (var f in files)
-                try { f.Delete(); } catch { }
-        }
-        catch { }
+        var files = new DirectoryInfo(dir).GetFiles("*.wav")
+            .OrderByDescending(f => f.Name)
+            .Skip(keep)
+            .ToArray();
+        foreach (var f in files)
+            try { f.Delete(); } catch { }
     }
 
     private void OnSettings(object? sender, EventArgs e)
