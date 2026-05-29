@@ -21,6 +21,10 @@ public sealed class TrayApp : ApplicationContext
         "wetflow", "error.log");
     private static bool _logDirCreated;
 
+    private static readonly string FailedAudioDir = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+        "wetflow", "failed-audio");
+
     public TrayApp()
     {
         (_settings, var settingsLoadError) = AppSettings.Load();
@@ -141,6 +145,7 @@ public sealed class TrayApp : ApplicationContext
         Task.Run(async () =>
         {
             string? wavPath = null;
+            bool shouldPreserveAudio = false;
             try
             {
                 var sw = Stopwatch.StartNew();
@@ -158,22 +163,30 @@ public sealed class TrayApp : ApplicationContext
                     _settings.ShortPauseSecs, _settings.LongPauseSecs, _settings.UseGpu, token);
                 Log($"[TIMING] wav-ready→transcription-complete: {sw.ElapsedMilliseconds} ms");
 
-                if (!string.IsNullOrWhiteSpace(text))
-                    await TextInjector.InjectAsync(text);
+                if (string.IsNullOrWhiteSpace(text))
+                    shouldPreserveAudio = true;
+                else
+                    await TextInjector.InjectAsync(text, _settings.OutputMode);
             }
             catch (OperationCanceledException)
             {
-                // Escape pressed — discard without injecting
+                // Escape pressed — discard without injecting, audio deleted normally
             }
             catch (Exception ex)
             {
                 LogError(ex);
+                shouldPreserveAudio = true;
                 _tray.ShowBalloonTip(8000, "WetFlow Error", $"{ex.Message} (see {LogPath})", ToolTipIcon.Error);
             }
             finally
             {
                 if (wavPath != null)
-                    try { File.Delete(wavPath); } catch (Exception) { }
+                {
+                    if (shouldPreserveAudio)
+                        SaveAudioForRecovery(wavPath);
+                    else
+                        try { File.Delete(wavPath); } catch (Exception) { }
+                }
                 if (_settings.ShowOverlay) _overlay.HideOverlay();
                 _hook.IsCancellable = false;
                 _cts?.Dispose();
@@ -224,6 +237,22 @@ public sealed class TrayApp : ApplicationContext
         _tray.ShowBalloonTip(5000, "WetFlow Warning",
             $"Failed to load settings, using defaults. (see {LogPath})",
             ToolTipIcon.Warning);
+
+    private void SaveAudioForRecovery(string wavPath)
+    {
+        try
+        {
+            Directory.CreateDirectory(FailedAudioDir);
+            var dest = Path.Combine(FailedAudioDir, $"wetflow_{DateTime.Now:yyyyMMdd_HHmmss}.wav");
+            File.Move(wavPath, dest);
+            _tray.ShowBalloonTip(8000, "WetFlow", $"Audio saved to {dest}", ToolTipIcon.Info);
+        }
+        catch (Exception ex)
+        {
+            LogError(ex);
+            try { File.Delete(wavPath); } catch { }
+        }
+    }
 
     private void OnSettings(object? sender, EventArgs e)
     {

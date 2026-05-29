@@ -32,17 +32,27 @@ public static class TextInjector
     }
 
     [DllImport("user32.dll")] static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
-    [DllImport("user32.dll")] static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
 
-    public static async Task InjectAsync(string text)
+    public static async Task InjectAsync(string text, OutputMode outputMode = OutputMode.KeyboardAndClipboard)
     {
         if (string.IsNullOrEmpty(text)) return;
 
         // Small delay so focus settles after key release
         await Task.Delay(80);
 
-        if (!TrySendInput(text))
-            await ClipboardFallbackAsync(text);
+        switch (outputMode)
+        {
+            case OutputMode.KeyboardOnly:
+                TrySendInput(text);
+                break;
+            case OutputMode.ClipboardOnly:
+                await SetClipboardAsync(text);
+                break;
+            default: // KeyboardAndClipboard
+                TrySendInput(text);
+                await SetClipboardAsync(text);
+                break;
+        }
     }
 
     private static bool TrySendInput(string text)
@@ -67,47 +77,18 @@ public static class TextInjector
         return sent == arr.Length;
     }
 
-    private static async Task ClipboardFallbackAsync(string text)
+    private static async Task SetClipboardAsync(string text)
     {
-        string? previous = null;
         var tcs = new TaskCompletionSource();
 
         // Clipboard must be accessed on STA thread
         var thread = new Thread(() =>
         {
-            try
-            {
-                previous = Clipboard.ContainsText() ? Clipboard.GetText() : null;
-                Clipboard.SetText(text);
-            }
-            finally
-            {
-                tcs.SetResult();
-            }
+            try { Clipboard.SetText(text); }
+            finally { tcs.SetResult(); }
         });
         thread.SetApartmentState(ApartmentState.STA);
         thread.Start();
         await tcs.Task;
-
-        // Send Ctrl+V
-        keybd_event(0x11, 0, 0, UIntPtr.Zero);          // Ctrl down
-        keybd_event(0x56, 0, 0, UIntPtr.Zero);          // V down
-        keybd_event(0x56, 0, 0x0002, UIntPtr.Zero);     // V up
-        keybd_event(0x11, 0, 0x0002, UIntPtr.Zero);     // Ctrl up
-
-        // Restore clipboard after paste settles
-        await Task.Delay(300);
-        if (previous != null)
-        {
-            var tcs2 = new TaskCompletionSource();
-            var t2 = new Thread(() =>
-            {
-                try { Clipboard.SetText(previous); }
-                finally { tcs2.SetResult(); }
-            });
-            t2.SetApartmentState(ApartmentState.STA);
-            t2.Start();
-            await tcs2.Task;
-        }
     }
 }

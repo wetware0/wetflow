@@ -11,6 +11,7 @@ public class SettingsForm : Form
     private Button _saveButton = null!;
     private CheckBox _toggleCheckBox = null!;
     private CheckBox _gpuCheckBox = null!;
+    private ComboBox _outputModeCombo = null!;
     private int _pendingVKey;
     private bool _capturing;
 
@@ -28,7 +29,7 @@ public class SettingsForm : Form
         MaximizeBox = false;
         MinimizeBox = false;
         StartPosition = FormStartPosition.CenterScreen;
-        ClientSize = new Size(320, 370);
+        ClientSize = new Size(320, 406);
 
         var hotkeyGroupLabel = new Label { Text = "Push-to-talk hotkey:", Left = 16, Top = 16, Width = 140, AutoSize = true };
         _hotkeyLabel = new Label { Left = 16, Top = 38, Width = 180, Height = 24, BorderStyle = BorderStyle.FixedSingle, TextAlign = ContentAlignment.MiddleLeft };
@@ -62,11 +63,16 @@ public class SettingsForm : Form
             Checked = _settings.UseGpu
         };
 
-        _saveButton = new Button { Text = "Save", Left = 220, Top = 332, Width = 80, Height = 28, DialogResult = DialogResult.OK };
+        var outputModeLabel = new Label { Text = "Output mode:", Left = 16, Top = 312, Width = 140, AutoSize = true };
+        _outputModeCombo = new ComboBox { Left = 16, Top = 334, Width = 200, DropDownStyle = ComboBoxStyle.DropDownList };
+        _outputModeCombo.Items.AddRange(new object[] { "Keyboard only", "Keyboard and clipboard", "Clipboard only" });
+        _outputModeCombo.SelectedIndex = (int)_settings.OutputMode;
+
+        _saveButton = new Button { Text = "Save", Left = 220, Top = 368, Width = 80, Height = 28, DialogResult = DialogResult.OK };
         _saveButton.Click += OnSave;
         AcceptButton = _saveButton;
 
-        Controls.AddRange(new Control[] { hotkeyGroupLabel, _hotkeyLabel, _captureButton, modelGroupLabel, _modelCombo, shortPauseLabel, _shortPauseInput, longPauseLabel, _longPauseInput, _toggleCheckBox, _gpuCheckBox, _saveButton });
+        Controls.AddRange(new Control[] { hotkeyGroupLabel, _hotkeyLabel, _captureButton, modelGroupLabel, _modelCombo, shortPauseLabel, _shortPauseInput, longPauseLabel, _longPauseInput, _toggleCheckBox, _gpuCheckBox, outputModeLabel, _outputModeCombo, _saveButton });
         KeyPreview = true;
     }
 
@@ -106,6 +112,8 @@ public class SettingsForm : Form
         _settings.LongPauseSecs = (double)_longPauseInput.Value;
         _settings.UseToggleMode = _toggleCheckBox.Checked;
         _settings.UseGpu = _gpuCheckBox.Checked;
+        // Items order matches OutputMode ordinals (0=Keyboard only, 1=Keyboard and clipboard, 2=Clipboard only)
+        _settings.OutputMode = (OutputMode)_outputModeCombo.SelectedIndex;
         _settings.Save();
     }
 }
