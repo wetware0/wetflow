@@ -59,40 +59,21 @@ public class PruneOldAudioFilesTests
         }
     }
 
-    [Fact]
-    public void LeavesFilesUntouched_WhenExactly3Exist()
+    [Theory]
+    [InlineData(3)]
+    [InlineData(2)]
+    public void LeavesFilesUntouched_WhenAtMost3Exist(int count)
     {
         var dir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
         Directory.CreateDirectory(dir);
         try
         {
-            File.WriteAllBytes(Path.Combine(dir, "wetflow_20240101_000000_000.wav"), []);
-            File.WriteAllBytes(Path.Combine(dir, "wetflow_20240102_000000_000.wav"), []);
-            File.WriteAllBytes(Path.Combine(dir, "wetflow_20240103_000000_000.wav"), []);
+            for (var i = 0; i < count; i++)
+                File.WriteAllBytes(Path.Combine(dir, $"wetflow_2024010{i + 1}_000000_000.wav"), []);
 
             TrayApp.PruneOldAudioFiles(dir);
 
-            Assert.Equal(3, Directory.GetFiles(dir, "*.wav").Length);
-        }
-        finally
-        {
-            Directory.Delete(dir, true);
-        }
-    }
-
-    [Fact]
-    public void LeavesFilesUntouched_WhenFewerThan3Exist()
-    {
-        var dir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
-        Directory.CreateDirectory(dir);
-        try
-        {
-            File.WriteAllBytes(Path.Combine(dir, "wetflow_20240101_000000_000.wav"), []);
-            File.WriteAllBytes(Path.Combine(dir, "wetflow_20240102_000000_000.wav"), []);
-
-            TrayApp.PruneOldAudioFiles(dir);
-
-            Assert.Equal(2, Directory.GetFiles(dir, "*.wav").Length);
+            Assert.Equal(count, Directory.GetFiles(dir, "*.wav").Length);
         }
         finally
         {

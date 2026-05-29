@@ -339,7 +339,7 @@ public sealed class TrayApp : ApplicationContext
     internal static void PruneOldAudioFiles(string dir, int keep = 3)
     {
         var files = new DirectoryInfo(dir).GetFiles("*.wav")
-            .OrderByDescending(f => f.Name)
+            .OrderByDescending(f => f.LastWriteTime)
             .Skip(keep)
             .ToArray();
         foreach (var f in files)
