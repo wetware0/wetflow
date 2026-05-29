@@ -2,6 +2,15 @@ using System.Text.Json;
 
 namespace WetFlow;
 
+// Ordinals are stable: KeyboardOnly=0, KeyboardAndClipboard=1, ClipboardOnly=2
+// Do NOT reorder or insert values — existing settings.json files store integer ordinals.
+public enum OutputMode
+{
+    KeyboardOnly,
+    KeyboardAndClipboard,
+    ClipboardOnly
+}
+
 public class AppSettings
 {
     public int HotkeyVKey { get; set; } = (int)Keys.F12;
@@ -13,6 +22,7 @@ public class AppSettings
     public double LongPauseSecs { get; set; } = 1.5;
     public bool UseToggleMode { get; set; } = true;
     public bool UseGpu { get; set; } = false;
+    public OutputMode OutputMode { get; set; } = OutputMode.KeyboardAndClipboard;
 
     private static readonly string SettingsPath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),

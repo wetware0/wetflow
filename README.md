@@ -25,7 +25,7 @@ Toggle mode:
 [F12 ↓] → record mic  →  [F12 ↓ again] → Whisper transcribes → text injected at cursor
 ```
 
-Audio is captured via WASAPI, resampled to 16 kHz mono, and transcribed by [Whisper.net](https://github.com/sandrohanea/whisper.net) using a local GGML model downloaded on first use (~150 MB for the default `base` model). Text is injected via `SendInput` (Unicode), with a clipboard + Ctrl+V fallback.
+Audio is captured via WASAPI, resampled to 16 kHz mono, and transcribed by [Whisper.net](https://github.com/sandrohanea/whisper.net) using a local GGML model downloaded on first use (~150 MB for the default `base` model). Text is injected via `SendInput` (Unicode); the **Output mode** setting controls delivery — `Keyboard and clipboard` (default) also writes to the clipboard, `Keyboard only` skips the clipboard, and `Clipboard only` skips `SendInput` entirely (useful when the target app blocks `SendInput`).
 
 ## Requirements
 
@@ -80,6 +80,7 @@ Right-click the tray icon → **Settings**:
 | Long pause (sec) | `1.5` | Gap between segments that inserts a blank line (`\n\n`); gaps below short pause are joined with a space |
 | Toggle mode | Off | When on: press once to start, press again to stop. When off: hold to record, release to transcribe |
 | Use GPU | Off | When on, uses NVIDIA CUDA for transcription (requires compatible GPU); falls back to CPU silently if GPU init fails — check `%APPDATA%\wetflow\error.log` |
+| Output mode | `Keyboard and clipboard` | Controls how transcribed text is delivered. `Keyboard only`: SendInput only (fastest; some apps block it). `Keyboard and clipboard`: SendInput + writes to clipboard. `Clipboard only`: writes to clipboard only (use when SendInput doesn't work). |
 
 Settings are saved to `%APPDATA%\wetflow\settings.json`.
 
@@ -95,6 +96,7 @@ Errors are logged to `%APPDATA%\wetflow\error.log` with full stack traces.
 | App won't start (second instance) | Already running — check the system tray |
 | "WetFlow Warning" balloon on startup or after settings save | `settings.json` is corrupt or unreadable — app is using defaults. Check `%APPDATA%\wetflow\error.log` for details; delete `settings.json` to reset to defaults |
 | GPU enabled but transcription is still slow | GPU init failed and fell back to CPU — check `%APPDATA%\wetflow\error.log` for "GPU init failed"; verify NVIDIA drivers and CUDA are installed |
+| "Audio saved to…" balloon appears | Transcription returned empty or threw an error. The WAV recording was moved to `%APPDATA%\wetflow\failed-audio\` so you can retry manually. Check `%APPDATA%\wetflow\error.log` for details. |
 
 ## Project structure
 
@@ -105,7 +107,7 @@ src/
   KeyboardHook.cs   — global low-level keyboard hook (WH_KEYBOARD_LL)
   Program.cs        — entry point, single-instance mutex
   SettingsForm.cs   — hotkey capture + model selection dialog
-  TextInjector.cs   — SendInput Unicode injection, clipboard fallback
+  TextInjector.cs   — SendInput Unicode injection, OutputMode-controlled clipboard write
   Transcriber.cs    — Whisper.net local transcription, model auto-download
   TrayApp.cs        — orchestrator, tray icon, pipeline coordination
 ```
