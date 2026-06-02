@@ -15,6 +15,7 @@ public class AppSettings
 {
     public int HotkeyVKey { get; set; } = (int)Keys.F12;
     public string WhisperModel { get; set; } = "base";
+    public string EscalationModel { get; set; } = "small"; // "" disables hallucination escalation
     public int OverlayX { get; set; } = -1; // -1 = unset; PositionOverlay() falls back to bottom-right corner
     public int OverlayY { get; set; } = -1;
     public bool ShowOverlay { get; set; } = true;

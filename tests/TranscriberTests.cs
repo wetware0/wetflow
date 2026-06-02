@@ -80,3 +80,46 @@ public class TranscriberTests
         Assert.Equal("Hello world", Transcriber.FormatSegments(segs, 0.5, 1.5));
     }
 }
+
+public class AnnotationFilterTests
+{
+    [Fact]
+    public void Filter_BracketAnnotation_ReturnsEmpty()
+        => Assert.Empty(Transcriber.FilterAnnotations(" [Music]"));
+
+    [Fact]
+    public void Filter_ParenAnnotation_ReturnsEmpty()
+        => Assert.Empty(Transcriber.FilterAnnotations(" (gunfire)"));
+
+    [Fact]
+    public void Filter_BlankAudio_ReturnsEmpty()
+        => Assert.Empty(Transcriber.FilterAnnotations("[BLANK_AUDIO]"));
+
+    [Fact]
+    public void Filter_SpeechOnly_ReturnsUnchanged()
+        => Assert.Equal("Hello world", Transcriber.FilterAnnotations("Hello world"));
+
+    [Fact]
+    public void Filter_MixedSpeechAndAnnotation_RetainsSpeech()
+        => Assert.Equal("Hello world", Transcriber.FilterAnnotations("Hello [Music] world"));
+
+    [Fact]
+    public void Filter_AnnotationBeforeSpeech_RetainsSpeech()
+        => Assert.Equal("Hello", Transcriber.FilterAnnotations("[Applause] Hello"));
+
+    [Fact]
+    public void Filter_MultipleAnnotations_ReturnsEmpty()
+        => Assert.Empty(Transcriber.FilterAnnotations("[Music] (gunfire) [Applause]"));
+
+    [Fact]
+    public void Filter_AnnotationAfterSpeech_RetainsSpeech()
+        => Assert.Equal("Hello", Transcriber.FilterAnnotations("Hello [Music]"));
+
+    [Fact]
+    public void Filter_EmptyString_ReturnsEmpty()
+        => Assert.Empty(Transcriber.FilterAnnotations(""));
+
+    [Fact]
+    public void Filter_WhitespaceOnly_ReturnsEmpty()
+        => Assert.Empty(Transcriber.FilterAnnotations("   "));
+}

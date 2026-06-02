@@ -200,7 +200,7 @@ public sealed class TrayApp : ApplicationContext
                 sw.Restart();
                 // On first run this includes model download; subsequent calls measure transcription only.
                 text = await _transcriber.TranscribeAsync(wavPath, _settings.WhisperModel,
-                    _settings.ShortPauseSecs, _settings.LongPauseSecs, _settings.UseGpu, token);
+                    _settings.ShortPauseSecs, _settings.LongPauseSecs, _settings.UseGpu, _settings.EscalationModel, token);
                 Log($"[TIMING] wav-ready→transcription-complete: {sw.ElapsedMilliseconds} ms");
 
                 if (!string.IsNullOrWhiteSpace(text))

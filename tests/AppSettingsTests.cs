@@ -155,6 +155,12 @@ public class AppSettingsTests
     }
 
     [Fact]
+    public void Default_EscalationModel_IsSmall()
+    {
+        Assert.Equal("small", new AppSettings().EscalationModel);
+    }
+
+    [Fact]
     public void Load_ReturnsSettings_WhenFileIsValid()
     {
         var path = Path.GetTempFileName();
