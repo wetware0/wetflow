@@ -77,3 +77,79 @@ public class SegmentResolverSpanTests
         Assert.Equal(0, length % 2);
     }
 }
+
+public class SegmentResolverResolveTests
+{
+    private static SegmentResolver.RawSegment Raw(string text, double startSecs, double endSecs, float minProb)
+        => new(text, TimeSpan.FromSeconds(startSecs), TimeSpan.FromSeconds(endSecs), minProb);
+
+    // Identity filter stand-in for Transcriber.FilterAnnotations in tests that don't need stripping.
+    private static string Strip(string s) => Transcriber.FilterAnnotations(s);
+
+    private static Func<(int, int), CancellationToken, Task<SegmentResolver.EscalationResult>> Escalator(
+        string text, float minProb)
+        => (_, _) => Task.FromResult(new SegmentResolver.EscalationResult(text, minProb));
+
+    [Fact]
+    public async Task Clean_PassesThrough()
+    {
+        var segs = new[] { Raw("Hello world", 0, 1, 0.9f) };
+        var result = await SegmentResolver.ResolveAsync(segs, 1_000_000, Strip, Escalator("X", 0.9f), default);
+        Assert.Single(result);
+        Assert.Equal("Hello world", result[0].Text);
+    }
+
+    [Fact]
+    public async Task Blank_IsDropped()
+    {
+        var segs = new[] { Raw("[BLANK_AUDIO]", 0, 1, 0.9f) };
+        var result = await SegmentResolver.ResolveAsync(segs, 1_000_000, Strip, Escalator("X", 0.9f), default);
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public async Task Flagged_ConfidentEscalation_IsReplaced()
+    {
+        var segs = new[] { Raw("I am very happy to see you again", 0, 2, 0.01f) };
+        var result = await SegmentResolver.ResolveAsync(segs, 1_000_000, Strip, Escalator("the real words", 0.8f), default);
+        Assert.Single(result);
+        Assert.Equal("the real words", result[0].Text);
+    }
+
+    [Fact]
+    public async Task Flagged_EmptyEscalation_IsDropped()
+    {
+        var segs = new[] { Raw("[Music]", 0, 2, 0.9f) };
+        var result = await SegmentResolver.ResolveAsync(segs, 1_000_000, Strip, Escalator("", 0.9f), default);
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public async Task Flagged_LowConfidenceEscalation_IsDropped()
+    {
+        var segs = new[] { Raw("I am very happy to see you again", 0, 2, 0.01f) };
+        var result = await SegmentResolver.ResolveAsync(segs, 1_000_000, Strip, Escalator("more noise", 0.01f), default);
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public async Task Flagged_EscalatorThrows_KeepsCleanedText()
+    {
+        var segs = new[] { Raw("I am very happy to see you again", 0, 2, 0.01f) };
+        Func<(int, int), CancellationToken, Task<SegmentResolver.EscalationResult>> throwing =
+            (_, _) => throw new InvalidOperationException("unavailable");
+        var result = await SegmentResolver.ResolveAsync(segs, 1_000_000, Strip, throwing, default);
+        Assert.Single(result);
+        Assert.Equal("I am very happy to see you again", result[0].Text);
+    }
+
+    [Fact]
+    public async Task Flagged_PureAnnotation_EscalatorThrows_IsDropped()
+    {
+        var segs = new[] { Raw("[Music]", 0, 2, 0.9f) };
+        Func<(int, int), CancellationToken, Task<SegmentResolver.EscalationResult>> throwing =
+            (_, _) => throw new InvalidOperationException("unavailable");
+        var result = await SegmentResolver.ResolveAsync(segs, 1_000_000, Strip, throwing, default);
+        Assert.Empty(result);
+    }
+}

@@ -58,4 +58,57 @@ internal static class SegmentResolver
         endByte = Math.Clamp(endByte, startByte, pcmLength);
         return (startByte, endByte - startByte);
     }
+
+    // Walks raw segments: keeps Clean (stripped) text, drops Blank, and for
+    // Flagged segments escalates the sliced span — replacing with confident
+    // re-transcribed text, or dropping when nothing is recoverable. On an
+    // escalation error the cleaned original is kept rather than lost.
+    internal static async Task<List<(string Text, TimeSpan Start, TimeSpan End)>> ResolveAsync(
+        IReadOnlyList<RawSegment> rawSegments,
+        int pcmLength,
+        Func<string, string> filter,
+        Func<(int Start, int Length), CancellationToken, Task<EscalationResult>> escalate,
+        CancellationToken ct)
+    {
+        var result = new List<(string, TimeSpan, TimeSpan)>();
+        foreach (var seg in rawSegments)
+        {
+            ct.ThrowIfCancellationRequested();
+            var cleaned = filter(seg.RawText);
+
+            switch (Classify(seg.RawText, cleaned, seg.MinTokenProb))
+            {
+                case SegmentClass.Blank:
+                    continue;
+
+                case SegmentClass.Clean:
+                    result.Add((cleaned, seg.Start, seg.End));
+                    break;
+
+                case SegmentClass.Flagged:
+                    EscalationResult esc;
+                    try
+                    {
+                        esc = await escalate(ComputeSpan(seg.Start, seg.End, pcmLength), ct);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        throw;
+                    }
+                    catch
+                    {
+                        // Escalation unavailable/errored — keep cleaned text rather than lose possibly-real speech.
+                        if (cleaned.Length > 0) result.Add((cleaned, seg.Start, seg.End));
+                        continue;
+                    }
+
+                    var escCleaned = filter(esc.Text);
+                    if (escCleaned.Length > 0 && esc.MinTokenProb >= LowConfidenceThreshold)
+                        result.Add((escCleaned, seg.Start, seg.End)); // Case B — recovered
+                    // else drop — Case A, nothing recoverable
+                    break;
+            }
+        }
+        return result;
+    }
 }
