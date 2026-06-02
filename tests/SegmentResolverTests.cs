@@ -35,3 +35,45 @@ public class SegmentResolverClassifyTests
         => Assert.Equal(SegmentResolver.SegmentClass.Clean,
             SegmentResolver.Classify("words", "words", SegmentResolver.LowConfidenceThreshold));
 }
+
+public class SegmentResolverSpanTests
+{
+    // 16 kHz * 2 bytes = 32000 bytes per second.
+
+    [Fact]
+    public void Span_LongerThanOneSecond_NotExpanded()
+    {
+        var (start, length) = SegmentResolver.ComputeSpan(
+            TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(3), pcmLength: 1_000_000);
+        Assert.Equal(64000, start);
+        Assert.Equal(32000, length);
+    }
+
+    [Fact]
+    public void Span_ShorterThanOneSecond_ExpandedSymmetrically()
+    {
+        // 2.0s..2.2s = 6400 bytes -> expand to 32000, centred.
+        var (start, length) = SegmentResolver.ComputeSpan(
+            TimeSpan.FromSeconds(2.0), TimeSpan.FromSeconds(2.2), pcmLength: 1_000_000);
+        Assert.Equal(51200, start);
+        Assert.Equal(32000, length);
+    }
+
+    [Fact]
+    public void Span_NearStart_ClampsToZero()
+    {
+        var (start, length) = SegmentResolver.ComputeSpan(
+            TimeSpan.FromSeconds(0), TimeSpan.FromSeconds(0.2), pcmLength: 32000);
+        Assert.Equal(0, start);
+        Assert.Equal(19200, length); // expansion clamped at both ends
+    }
+
+    [Fact]
+    public void Span_ByteOffsetsAreSampleAligned()
+    {
+        var (start, length) = SegmentResolver.ComputeSpan(
+            TimeSpan.FromSeconds(1.0000625), TimeSpan.FromSeconds(3), pcmLength: 1_000_000);
+        Assert.Equal(0, start % 2);
+        Assert.Equal(0, length % 2);
+    }
+}

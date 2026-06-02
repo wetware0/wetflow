@@ -34,4 +34,28 @@ internal static class SegmentResolver
 
         return minTokenProb < LowConfidenceThreshold ? SegmentClass.Flagged : SegmentClass.Clean;
     }
+
+    // Byte range within the chunk PCM for [start,end], expanded to at least one
+    // second (so Whisper has a usable window) and clamped to [0, pcmLength].
+    internal static (int Start, int Length) ComputeSpan(TimeSpan start, TimeSpan end, int pcmLength)
+    {
+        int bytesPerSecond = SampleRate * BytesPerSample;
+        int startByte = (int)(start.TotalSeconds * bytesPerSecond);
+        int endByte = (int)(end.TotalSeconds * bytesPerSecond);
+
+        startByte -= startByte % BytesPerSample;
+        endByte -= endByte % BytesPerSample;
+
+        int minBytes = bytesPerSecond; // one second
+        if (endByte - startByte < minBytes)
+        {
+            int deficit = minBytes - (endByte - startByte);
+            startByte -= deficit / 2;
+            endByte += deficit - deficit / 2;
+        }
+
+        startByte = Math.Clamp(startByte, 0, pcmLength);
+        endByte = Math.Clamp(endByte, startByte, pcmLength);
+        return (startByte, endByte - startByte);
+    }
 }
