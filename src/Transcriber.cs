@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text;
+using System.Text.RegularExpressions;
 using Whisper.net;
 using Whisper.net.Ggml;
 
@@ -214,14 +215,23 @@ public sealed class Transcriber : IDisposable
         w.Write(pcm, offset, length);
     }
 
+    private static readonly Regex _annotationPattern =
+        new(@"\[[^\]]+\]|\([^)]+\)", RegexOptions.Compiled);
+
+    private static readonly Regex _whitespacePattern =
+        new(@"\s+", RegexOptions.Compiled);
+
     private static async Task<List<(string Text, TimeSpan Start, TimeSpan End)>> TranscribeStreamAsync(
         WhisperProcessor processor, Stream stream, CancellationToken ct)
     {
         var sw = Stopwatch.StartNew();
         var segs = new List<(string Text, TimeSpan Start, TimeSpan End)>();
         await foreach (var seg in processor.ProcessAsync(stream).WithCancellation(ct))
-            if (!seg.Text.Contains("[BLANK_AUDIO]", StringComparison.Ordinal))
-                segs.Add((seg.Text, seg.Start, seg.End));
+        {
+            var cleaned = _whitespacePattern.Replace(_annotationPattern.Replace(seg.Text, " "), " ").Trim();
+            if (!string.IsNullOrWhiteSpace(cleaned))
+                segs.Add((cleaned, seg.Start, seg.End));
+        }
         TrayApp.Log($"[TIMING] chunk-transcription: {sw.ElapsedMilliseconds} ms");
         return segs;
     }
