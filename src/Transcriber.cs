@@ -32,7 +32,14 @@ public sealed class Transcriber : IDisposable
 
         // Create a fresh processor per transcription so the model's inference
         // context window does not carry over between recordings.
-        await using var processor = factory.CreateBuilder().WithLanguage("auto").Build();
+        // WithNoContext stops a window's hallucinated tokens from seeding the next
+        // window, and WithNoSpeechThreshold suppresses output on near-silent audio —
+        // both reduce the [Music]/(gunfire) hallucinations Whisper emits over silence.
+        await using var processor = factory.CreateBuilder()
+            .WithLanguage("auto")
+            .WithNoContext()
+            .WithNoSpeechThreshold(0.3f)
+            .Build();
 
         var chunks = BuildChunks(wavPath, shortPauseSecs, longPauseSecs);
 
