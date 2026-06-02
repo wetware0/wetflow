@@ -38,6 +38,7 @@ public sealed class Transcriber : IDisposable
 
         // Create a fresh processor per transcription so the model's inference
         // context window does not carry over between recordings.
+        // (No NoContext/NoSpeechThreshold options — hallucinations are handled downstream by SegmentResolver.)
         await using var processor = factory.CreateBuilder().WithLanguage("auto").Build();
 
         var chunks = BuildChunks(wavPath, shortPauseSecs, longPauseSecs);
@@ -272,7 +273,8 @@ public sealed class Transcriber : IDisposable
     private async Task<List<(string Text, TimeSpan Start, TimeSpan End)>> TranscribeChunkAsync(
         string chunkPath, WhisperProcessor processor, bool useGpu, string escalationModel, CancellationToken ct)
     {
-        var pcm = ReadPcm(chunkPath);
+        // Only needed for escalation slicing; skip the read entirely when disabled.
+        var pcm = string.IsNullOrWhiteSpace(escalationModel) ? Array.Empty<byte>() : ReadPcm(chunkPath);
 
         List<SegmentResolver.RawSegment> raw;
         using (var fs = File.OpenRead(chunkPath))
@@ -282,6 +284,7 @@ public sealed class Transcriber : IDisposable
         {
             var escFactory = await EnsureEscalationFactoryAsync(escalationModel, useGpu);
             if (escFactory == null) throw new InvalidOperationException("escalation unavailable");
+            if (span.Length == 0) return new SegmentResolver.EscalationResult("", 1f);
 
             var slicePath = Path.Combine(Path.GetTempPath(), $"wetflow_e_{Guid.NewGuid():N}.wav");
             try
