@@ -85,15 +85,15 @@ public class AnnotationFilterTests
 {
     [Fact]
     public void Filter_BracketAnnotation_ReturnsEmpty()
-        => Assert.Equal("", Transcriber.FilterAnnotations(" [Music]"));
+        => Assert.Empty(Transcriber.FilterAnnotations(" [Music]"));
 
     [Fact]
     public void Filter_ParenAnnotation_ReturnsEmpty()
-        => Assert.Equal("", Transcriber.FilterAnnotations(" (gunfire)"));
+        => Assert.Empty(Transcriber.FilterAnnotations(" (gunfire)"));
 
     [Fact]
     public void Filter_BlankAudio_ReturnsEmpty()
-        => Assert.Equal("", Transcriber.FilterAnnotations("[BLANK_AUDIO]"));
+        => Assert.Empty(Transcriber.FilterAnnotations("[BLANK_AUDIO]"));
 
     [Fact]
     public void Filter_SpeechOnly_ReturnsUnchanged()
@@ -109,7 +109,7 @@ public class AnnotationFilterTests
 
     [Fact]
     public void Filter_MultipleAnnotations_ReturnsEmpty()
-        => Assert.Equal("", Transcriber.FilterAnnotations("[Music] (gunfire) [Applause]"));
+        => Assert.Empty(Transcriber.FilterAnnotations("[Music] (gunfire) [Applause]"));
 
     [Fact]
     public void Filter_AnnotationAfterSpeech_RetainsSpeech()
@@ -117,9 +117,9 @@ public class AnnotationFilterTests
 
     [Fact]
     public void Filter_EmptyString_ReturnsEmpty()
-        => Assert.Equal("", Transcriber.FilterAnnotations(""));
+        => Assert.Empty(Transcriber.FilterAnnotations(""));
 
     [Fact]
     public void Filter_WhitespaceOnly_ReturnsEmpty()
-        => Assert.Equal("", Transcriber.FilterAnnotations("   "));
+        => Assert.Empty(Transcriber.FilterAnnotations("   "));
 }

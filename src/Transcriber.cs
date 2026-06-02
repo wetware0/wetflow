@@ -223,8 +223,7 @@ public sealed class Transcriber : IDisposable
 
     internal static string FilterAnnotations(string text)
     {
-        var cleaned = _whitespacePattern.Replace(_annotationPattern.Replace(text, " "), " ").Trim();
-        return string.IsNullOrWhiteSpace(cleaned) ? "" : cleaned;
+        return _whitespacePattern.Replace(_annotationPattern.Replace(text, " "), " ").Trim();
     }
 
     private static async Task<List<(string Text, TimeSpan Start, TimeSpan End)>> TranscribeStreamAsync(
@@ -235,7 +234,7 @@ public sealed class Transcriber : IDisposable
         await foreach (var seg in processor.ProcessAsync(stream).WithCancellation(ct))
         {
             var cleaned = FilterAnnotations(seg.Text);
-            if (!string.IsNullOrWhiteSpace(cleaned))
+            if (cleaned.Length > 0)
                 segs.Add((cleaned, seg.Start, seg.End));
         }
         TrayApp.Log($"[TIMING] chunk-transcription: {sw.ElapsedMilliseconds} ms");
