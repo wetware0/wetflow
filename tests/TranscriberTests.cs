@@ -1,4 +1,3 @@
-using System.Text.RegularExpressions;
 using WetFlow;
 using Xunit;
 
@@ -84,44 +83,43 @@ public class TranscriberTests
 
 public class AnnotationFilterTests
 {
-    // Mirror the regex from Transcriber so we can test the pattern in isolation.
-    private static readonly Regex _pattern =
-        new(@"\[[^\]]+\]|\([^)]+\)", RegexOptions.Compiled);
-
-    private static readonly Regex _whitespace =
-        new(@"\s+", RegexOptions.Compiled);
-
-    private static string Filter(string text)
-    {
-        var cleaned = _whitespace.Replace(_pattern.Replace(text, " "), " ").Trim();
-        return string.IsNullOrWhiteSpace(cleaned) ? "" : cleaned;
-    }
-
     [Fact]
     public void Filter_BracketAnnotation_ReturnsEmpty()
-        => Assert.Equal("", Filter(" [Music]"));
+        => Assert.Equal("", Transcriber.FilterAnnotations(" [Music]"));
 
     [Fact]
     public void Filter_ParenAnnotation_ReturnsEmpty()
-        => Assert.Equal("", Filter(" (gunfire)"));
+        => Assert.Equal("", Transcriber.FilterAnnotations(" (gunfire)"));
 
     [Fact]
     public void Filter_BlankAudio_ReturnsEmpty()
-        => Assert.Equal("", Filter("[BLANK_AUDIO]"));
+        => Assert.Equal("", Transcriber.FilterAnnotations("[BLANK_AUDIO]"));
 
     [Fact]
     public void Filter_SpeechOnly_ReturnsUnchanged()
-        => Assert.Equal("Hello world", Filter("Hello world"));
+        => Assert.Equal("Hello world", Transcriber.FilterAnnotations("Hello world"));
 
     [Fact]
     public void Filter_MixedSpeechAndAnnotation_RetainsSpeech()
-        => Assert.Equal("Hello world", Filter("Hello [Music] world"));
+        => Assert.Equal("Hello world", Transcriber.FilterAnnotations("Hello [Music] world"));
 
     [Fact]
     public void Filter_AnnotationBeforeSpeech_RetainsSpeech()
-        => Assert.Equal("Hello", Filter("[Applause] Hello"));
+        => Assert.Equal("Hello", Transcriber.FilterAnnotations("[Applause] Hello"));
 
     [Fact]
     public void Filter_MultipleAnnotations_ReturnsEmpty()
-        => Assert.Equal("", Filter("[Music] (gunfire) [Applause]"));
+        => Assert.Equal("", Transcriber.FilterAnnotations("[Music] (gunfire) [Applause]"));
+
+    [Fact]
+    public void Filter_AnnotationAfterSpeech_RetainsSpeech()
+        => Assert.Equal("Hello", Transcriber.FilterAnnotations("Hello [Music]"));
+
+    [Fact]
+    public void Filter_EmptyString_ReturnsEmpty()
+        => Assert.Equal("", Transcriber.FilterAnnotations(""));
+
+    [Fact]
+    public void Filter_WhitespaceOnly_ReturnsEmpty()
+        => Assert.Equal("", Transcriber.FilterAnnotations("   "));
 }

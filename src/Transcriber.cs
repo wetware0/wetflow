@@ -221,6 +221,12 @@ public sealed class Transcriber : IDisposable
     private static readonly Regex _whitespacePattern =
         new(@"\s+", RegexOptions.Compiled);
 
+    internal static string FilterAnnotations(string text)
+    {
+        var cleaned = _whitespacePattern.Replace(_annotationPattern.Replace(text, " "), " ").Trim();
+        return string.IsNullOrWhiteSpace(cleaned) ? "" : cleaned;
+    }
+
     private static async Task<List<(string Text, TimeSpan Start, TimeSpan End)>> TranscribeStreamAsync(
         WhisperProcessor processor, Stream stream, CancellationToken ct)
     {
@@ -228,7 +234,7 @@ public sealed class Transcriber : IDisposable
         var segs = new List<(string Text, TimeSpan Start, TimeSpan End)>();
         await foreach (var seg in processor.ProcessAsync(stream).WithCancellation(ct))
         {
-            var cleaned = _whitespacePattern.Replace(_annotationPattern.Replace(seg.Text, " "), " ").Trim();
+            var cleaned = FilterAnnotations(seg.Text);
             if (!string.IsNullOrWhiteSpace(cleaned))
                 segs.Add((cleaned, seg.Start, seg.End));
         }
