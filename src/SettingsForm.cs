@@ -6,6 +6,7 @@ public class SettingsForm : Form
     private Label _hotkeyLabel = null!;
     private Button _captureButton = null!;
     private ComboBox _modelCombo = null!;
+    private ComboBox _escalationCombo = null!;
     private NumericUpDown _shortPauseInput = null!;
     private NumericUpDown _longPauseInput = null!;
     private Button _saveButton = null!;
@@ -43,6 +44,12 @@ public class SettingsForm : Form
         _modelCombo.SelectedItem = _settings.WhisperModel;
         if (_modelCombo.SelectedIndex < 0) _modelCombo.SelectedIndex = 1;
 
+        var escalationGroupLabel = new Label { Text = "Escalation model:", Left = 170, Top = 76, Width = 140, AutoSize = true };
+        _escalationCombo = new ComboBox { Left = 170, Top = 98, Width = 134, DropDownStyle = ComboBoxStyle.DropDownList };
+        _escalationCombo.Items.AddRange(new object[] { "Off", "tiny", "base", "base.en", "base-q5_1", "small", "small.en", "small-q5_1", "medium" });
+        _escalationCombo.SelectedItem = SelectionFromEscalationModel(_settings.EscalationModel);
+        if (_escalationCombo.SelectedIndex < 0) _escalationCombo.SelectedItem = "small";
+
         var shortPauseLabel = new Label { Text = "Short pause (sec):", Left = 16, Top = 132, Width = 140, AutoSize = true };
         _shortPauseInput = new NumericUpDown { Left = 16, Top = 154, Width = 80, Minimum = 0.1M, Maximum = 10.0M, DecimalPlaces = 1, Increment = 0.1M, Value = (decimal)_settings.ShortPauseSecs };
 
@@ -72,7 +79,7 @@ public class SettingsForm : Form
         _saveButton.Click += OnSave;
         AcceptButton = _saveButton;
 
-        Controls.AddRange(new Control[] { hotkeyGroupLabel, _hotkeyLabel, _captureButton, modelGroupLabel, _modelCombo, shortPauseLabel, _shortPauseInput, longPauseLabel, _longPauseInput, _toggleCheckBox, _gpuCheckBox, outputModeLabel, _outputModeCombo, _saveButton });
+        Controls.AddRange(new Control[] { hotkeyGroupLabel, _hotkeyLabel, _captureButton, modelGroupLabel, _modelCombo, escalationGroupLabel, _escalationCombo, shortPauseLabel, _shortPauseInput, longPauseLabel, _longPauseInput, _toggleCheckBox, _gpuCheckBox, outputModeLabel, _outputModeCombo, _saveButton });
         KeyPreview = true;
     }
 
@@ -98,6 +105,13 @@ public class SettingsForm : Form
         base.OnKeyDown(e);
     }
 
+    // The escalation dropdown's "Off" entry maps to an empty EscalationModel (feature disabled).
+    internal static string EscalationModelFromSelection(string? selection)
+        => string.IsNullOrEmpty(selection) || selection == "Off" ? "" : selection;
+
+    internal static string SelectionFromEscalationModel(string model)
+        => string.IsNullOrEmpty(model) ? "Off" : model;
+
     private void OnSave(object? sender, EventArgs e)
     {
         if (_shortPauseInput.Value >= _longPauseInput.Value)
@@ -108,6 +122,7 @@ public class SettingsForm : Form
         }
         _settings.HotkeyVKey = _pendingVKey;
         _settings.WhisperModel = _modelCombo.SelectedItem?.ToString() ?? "base";
+        _settings.EscalationModel = EscalationModelFromSelection(_escalationCombo.SelectedItem?.ToString());
         _settings.ShortPauseSecs = (double)_shortPauseInput.Value;
         _settings.LongPauseSecs = (double)_longPauseInput.Value;
         _settings.UseToggleMode = _toggleCheckBox.Checked;
