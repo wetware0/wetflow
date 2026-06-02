@@ -13,11 +13,17 @@ public sealed class Transcriber : IDisposable
     private bool _currentUseGpu;
     private readonly SemaphoreSlim _initLock = new(1, 1);
 
+    private WhisperFactory? _escalationFactory;
+    private string? _currentEscalationModel;
+    private bool _currentEscalationUseGpu;
+    private bool _escalationLoadFailed;
+    private readonly SemaphoreSlim _escalationInitLock = new(1, 1);
+
     public event Action<string>? StatusChanged;
 
     public async Task<string> TranscribeAsync(string wavPath, string modelName = "base",
         double shortPauseSecs = 0.5, double longPauseSecs = 1.5,
-        bool useGpu = false, CancellationToken cancellationToken = default)
+        bool useGpu = false, string escalationModel = "", CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
         await EnsureInitializedAsync(modelName, useGpu);
@@ -32,21 +38,13 @@ public sealed class Transcriber : IDisposable
 
         // Create a fresh processor per transcription so the model's inference
         // context window does not carry over between recordings.
-        // WithNoContext stops a window's hallucinated tokens from seeding the next
-        // window, and WithNoSpeechThreshold suppresses output on near-silent audio —
-        // both reduce the [Music]/(gunfire) hallucinations Whisper emits over silence.
-        await using var processor = factory.CreateBuilder()
-            .WithLanguage("auto")
-            .WithNoContext()
-            .WithNoSpeechThreshold(0.3f)
-            .Build();
+        await using var processor = factory.CreateBuilder().WithLanguage("auto").Build();
 
         var chunks = BuildChunks(wavPath, shortPauseSecs, longPauseSecs);
 
         if (chunks.Count == 1 && chunks[0].ChunkPath == wavPath)
         {
-            using var fileStream = File.OpenRead(wavPath);
-            var segments = await TranscribeStreamAsync(processor, fileStream, cancellationToken);
+            var segments = await TranscribeChunkAsync(wavPath, processor, useGpu, escalationModel, cancellationToken);
             return FormatSegments(segments, shortPauseSecs, longPauseSecs);
         }
 
@@ -60,8 +58,7 @@ public sealed class Transcriber : IDisposable
                 if (sepBefore == "\n\n" || (carrySep != "\n\n" && sepBefore.Length > 0))
                     carrySep = sepBefore;
 
-                using var fs = File.OpenRead(chunkPath);
-                var segs = await TranscribeStreamAsync(processor, fs, cancellationToken);
+                var segs = await TranscribeChunkAsync(chunkPath, processor, useGpu, escalationModel, cancellationToken);
                 var text = FormatSegments(segs, shortPauseSecs, longPauseSecs).Trim();
 
                 if (!string.IsNullOrWhiteSpace(text))
@@ -233,19 +230,77 @@ public sealed class Transcriber : IDisposable
         return _whitespacePattern.Replace(_annotationPattern.Replace(text, " "), " ").Trim();
     }
 
-    private static async Task<List<(string Text, TimeSpan Start, TimeSpan End)>> TranscribeStreamAsync(
+    private static async Task<List<SegmentResolver.RawSegment>> TranscribeStreamAsync(
         WhisperProcessor processor, Stream stream, CancellationToken ct)
     {
         var sw = Stopwatch.StartNew();
-        var segs = new List<(string Text, TimeSpan Start, TimeSpan End)>();
+        var segs = new List<SegmentResolver.RawSegment>();
         await foreach (var seg in processor.ProcessAsync(stream).WithCancellation(ct))
-        {
-            var cleaned = FilterAnnotations(seg.Text);
-            if (cleaned.Length > 0)
-                segs.Add((cleaned, seg.Start, seg.End));
-        }
+            segs.Add(new SegmentResolver.RawSegment(seg.Text, seg.Start, seg.End, MinTokenProb(seg)));
         TrayApp.Log($"[TIMING] chunk-transcription: {sw.ElapsedMilliseconds} ms");
         return segs;
+    }
+
+    // Minimum probability across the segment's non-special tokens (special tokens
+    // such as timestamps render as text beginning with "[_"). Returns 1.0 when the
+    // segment has no scorable tokens.
+    private static float MinTokenProb(SegmentData seg)
+    {
+        float min = 1f;
+        bool any = false;
+        if (seg.Tokens != null)
+            foreach (var t in seg.Tokens)
+            {
+                if (string.IsNullOrEmpty(t.Text) || t.Text.StartsWith("[_", StringComparison.Ordinal)) continue;
+                any = true;
+                if (t.Probability < min) min = t.Probability;
+            }
+        return any ? min : 1f;
+    }
+
+    private static byte[] ReadPcm(string wavPath)
+    {
+        using var fs = File.OpenRead(wavPath);
+        fs.Seek(44, SeekOrigin.Begin);
+        var pcm = new byte[fs.Length - 44];
+        _ = fs.Read(pcm, 0, pcm.Length);
+        return pcm;
+    }
+
+    // Transcribes one chunk and resolves hallucinated segments by escalating the
+    // flagged audio span to the larger model.
+    private async Task<List<(string Text, TimeSpan Start, TimeSpan End)>> TranscribeChunkAsync(
+        string chunkPath, WhisperProcessor processor, bool useGpu, string escalationModel, CancellationToken ct)
+    {
+        var pcm = ReadPcm(chunkPath);
+
+        List<SegmentResolver.RawSegment> raw;
+        using (var fs = File.OpenRead(chunkPath))
+            raw = await TranscribeStreamAsync(processor, fs, ct);
+
+        async Task<SegmentResolver.EscalationResult> Escalate((int Start, int Length) span, CancellationToken token)
+        {
+            var escFactory = await EnsureEscalationFactoryAsync(escalationModel, useGpu);
+            if (escFactory == null) throw new InvalidOperationException("escalation unavailable");
+
+            var slicePath = Path.Combine(Path.GetTempPath(), $"wetflow_e_{Guid.NewGuid():N}.wav");
+            try
+            {
+                WritePcmWav(slicePath, pcm, span.Start, span.Length, 16000);
+                await using var escProcessor = escFactory.CreateBuilder().WithLanguage("auto").Build();
+                using var fs = File.OpenRead(slicePath);
+                var escRaw = await TranscribeStreamAsync(escProcessor, fs, token);
+                var text = string.Join(" ", escRaw.Select(r => r.RawText));
+                float minProb = escRaw.Count > 0 ? escRaw.Min(r => r.MinTokenProb) : 1f;
+                return new SegmentResolver.EscalationResult(text, minProb);
+            }
+            finally
+            {
+                try { File.Delete(slicePath); } catch { }
+            }
+        }
+
+        return await SegmentResolver.ResolveAsync(raw, pcm.Length, FilterAnnotations, Escalate, ct);
     }
 
     private async Task EnsureInitializedAsync(string modelName, bool useGpu)
@@ -257,44 +312,9 @@ public sealed class Transcriber : IDisposable
         {
             if (_currentModelName == modelName && _currentUseGpu == useGpu && _factory != null) return;
 
-            // Dispose old factory when config changes; the processor is created
-            // fresh per transcription, so there is none to dispose here.
             _factory?.Dispose();
             _factory = null;
-
-            var (modelType, quantType) = ParseModel(modelName);
-
-            var modelDir = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "wetflow", "models");
-            Directory.CreateDirectory(modelDir);
-
-            var modelPath = Path.Combine(modelDir, $"ggml-{modelName}.bin");
-
-            if (!File.Exists(modelPath))
-            {
-                StatusChanged?.Invoke($"Downloading Whisper {modelName} model (first run)…");
-                using var httpClient = new System.Net.Http.HttpClient();
-                var downloader = new WhisperGgmlDownloader(httpClient);
-                var modelStream = await downloader.GetGgmlModelAsync(modelType, quantType);
-                using var fs = File.Create(modelPath);
-                await modelStream.CopyToAsync(fs);
-            }
-
-            if (useGpu)
-                try { _factory = WhisperFactory.FromPath(modelPath, new WhisperFactoryOptions { UseGpu = true }); }
-                catch (Exception ex)
-                {
-                    TrayApp.Log($"GPU init failed, falling back to CPU: {ex}");
-                    StatusChanged?.Invoke("GPU unavailable — using CPU");
-                    useGpu = false;
-                }
-
-            if (!useGpu)
-                _factory = WhisperFactory.FromPath(modelPath);
-
-            // Do not create the processor here — it is created fresh per
-            // TranscribeAsync call to avoid context carryover between recordings.
+            _factory = await CreateFactoryAsync(modelName, useGpu);
             _currentModelName = modelName;
             _currentUseGpu = useGpu;
             StatusChanged?.Invoke("Ready");
@@ -302,6 +322,77 @@ public sealed class Transcriber : IDisposable
         finally
         {
             _initLock.Release();
+        }
+    }
+
+    // Downloads the model if needed and builds a factory, preferring GPU and
+    // falling back to CPU on failure.
+    private async Task<WhisperFactory> CreateFactoryAsync(string modelName, bool useGpu)
+    {
+        var modelDir = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "wetflow", "models");
+        Directory.CreateDirectory(modelDir);
+
+        var modelPath = Path.Combine(modelDir, $"ggml-{modelName}.bin");
+
+        if (!File.Exists(modelPath))
+        {
+            StatusChanged?.Invoke($"Downloading Whisper {modelName} model (first run)…");
+            var (modelType, quantType) = ParseModel(modelName);
+            using var httpClient = new System.Net.Http.HttpClient();
+            var downloader = new WhisperGgmlDownloader(httpClient);
+            var modelStream = await downloader.GetGgmlModelAsync(modelType, quantType);
+            using var fs = File.Create(modelPath);
+            await modelStream.CopyToAsync(fs);
+        }
+
+        if (useGpu)
+        {
+            try { return WhisperFactory.FromPath(modelPath, new WhisperFactoryOptions { UseGpu = true }); }
+            catch (Exception ex)
+            {
+                TrayApp.Log($"GPU init failed, falling back to CPU: {ex}");
+                StatusChanged?.Invoke("GPU unavailable — using CPU");
+            }
+        }
+
+        return WhisperFactory.FromPath(modelPath);
+    }
+
+    // Lazily loads the escalation model. Returns null when escalation is disabled
+    // (empty model name) or a previous load failed this session.
+    private async Task<WhisperFactory?> EnsureEscalationFactoryAsync(string escalationModel, bool useGpu)
+    {
+        if (string.IsNullOrWhiteSpace(escalationModel) || _escalationLoadFailed) return null;
+        if (_currentEscalationModel == escalationModel && _currentEscalationUseGpu == useGpu && _escalationFactory != null)
+            return _escalationFactory;
+
+        await _escalationInitLock.WaitAsync();
+        try
+        {
+            if (_currentEscalationModel == escalationModel && _currentEscalationUseGpu == useGpu && _escalationFactory != null)
+                return _escalationFactory;
+
+            _escalationFactory?.Dispose();
+            _escalationFactory = null;
+            try
+            {
+                _escalationFactory = await CreateFactoryAsync(escalationModel, useGpu);
+                _currentEscalationModel = escalationModel;
+                _currentEscalationUseGpu = useGpu;
+            }
+            catch (Exception ex)
+            {
+                TrayApp.Log($"Escalation model load failed ({escalationModel}); disabling escalation: {ex}");
+                _escalationLoadFailed = true;
+                _escalationFactory = null;
+            }
+            return _escalationFactory;
+        }
+        finally
+        {
+            _escalationInitLock.Release();
         }
     }
 
@@ -321,6 +412,8 @@ public sealed class Transcriber : IDisposable
     public void Dispose()
     {
         _factory?.Dispose();
+        _escalationFactory?.Dispose();
         _initLock.Dispose();
+        _escalationInitLock.Dispose();
     }
 }
