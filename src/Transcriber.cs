@@ -294,6 +294,8 @@ public sealed class Transcriber : IDisposable
                 using var fs = File.OpenRead(slicePath);
                 var escRaw = await TranscribeStreamAsync(escProcessor, fs, token);
                 var text = string.Join(" ", escRaw.Select(r => r.RawText));
+                // Conservative: lowest token probability across all escalation segments,
+                // so one low-confidence segment causes the span to be treated as unrecoverable.
                 float minProb = escRaw.Count > 0 ? escRaw.Min(r => r.MinTokenProb) : 1f;
                 return new SegmentResolver.EscalationResult(text, minProb);
             }

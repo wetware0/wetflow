@@ -60,12 +60,23 @@ public class SegmentResolverSpanTests
     }
 
     [Fact]
+    public void Span_NearEnd_ClampsToLength()
+    {
+        // 1.9s..2.0s in a 2s (64000-byte) buffer: expansion would push end past
+        // the buffer, so it clamps to pcmLength while the start stays put.
+        var (start, length) = SegmentResolver.ComputeSpan(
+            TimeSpan.FromSeconds(1.9), TimeSpan.FromSeconds(2.0), pcmLength: 64000);
+        Assert.Equal(46400, start);
+        Assert.Equal(17600, length);
+    }
+
+    [Fact]
     public void Span_NearStart_ClampsToZero()
     {
         var (start, length) = SegmentResolver.ComputeSpan(
             TimeSpan.FromSeconds(0), TimeSpan.FromSeconds(0.2), pcmLength: 32000);
         Assert.Equal(0, start);
-        Assert.Equal(19200, length); // expansion clamped at both ends
+        Assert.Equal(19200, length); // expansion clamped at start only (end stays within bounds)
     }
 
     [Fact]
@@ -83,7 +94,7 @@ public class SegmentResolverResolveTests
     private static SegmentResolver.RawSegment Raw(string text, double startSecs, double endSecs, float minProb)
         => new(text, TimeSpan.FromSeconds(startSecs), TimeSpan.FromSeconds(endSecs), minProb);
 
-    // Identity filter stand-in for Transcriber.FilterAnnotations in tests that don't need stripping.
+    // Uses the real Transcriber.FilterAnnotations so tests cover the actual annotation stripping.
     private static string Strip(string s) => Transcriber.FilterAnnotations(s);
 
     private static Func<(int, int), CancellationToken, Task<SegmentResolver.EscalationResult>> Escalator(
@@ -151,5 +162,22 @@ public class SegmentResolverResolveTests
             (_, _) => throw new InvalidOperationException("unavailable");
         var result = await SegmentResolver.ResolveAsync(segs, 1_000_000, Strip, throwing, default);
         Assert.Empty(result);
+    }
+
+    [Fact]
+    public async Task MultiSegment_MixedClasses_ResolvedInOrder()
+    {
+        var segs = new[]
+        {
+            Raw("First clean", 0, 1, 0.9f),
+            Raw("[BLANK_AUDIO]", 1, 2, 0.9f),
+            Raw("garbled hallucination", 2, 3, 0.01f),
+            Raw("Last clean", 3, 4, 0.9f),
+        };
+        var result = await SegmentResolver.ResolveAsync(segs, 1_000_000, Strip, Escalator("recovered words", 0.8f), default);
+        Assert.Equal(3, result.Count);
+        Assert.Equal("First clean", result[0].Text);   // Clean kept
+        Assert.Equal("recovered words", result[1].Text); // Blank dropped; Flagged replaced
+        Assert.Equal("Last clean", result[2].Text);
     }
 }
